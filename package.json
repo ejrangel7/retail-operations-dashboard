@@ -1,0 +1,12 @@
+{
+  "name": "retail-operations-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter ./apps/* dev",
+    "build": "pnpm --recursive build",
+    "typecheck": "pnpm --recursive typecheck"
+  },
+  "packageManager": "pnpm@10.15.0"
+}
+
