@@ -50,8 +50,7 @@ app.get("/api/orders", async (_request, response) => {
     `SELECT id, order_number AS "orderNumber", customer_name AS "customerName",
             status, total::float, created_at AS "createdAt"
      FROM orders
-     ORDER BY created_at DESC
-     LIMIT 10`,
+     ORDER BY created_at DESC`,
   );
   response.json(result.rows);
 });

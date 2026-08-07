@@ -15,17 +15,62 @@ const date = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 });
 
+async function fetchJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`);
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
 function App() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [showAllOrders, setShowAllOrders] = useState(false);
   const [error, setError] = useState("");
+
+  const visibleOrders = showAllOrders ? orders : orders.slice(0, 3);
+
+  function exportReport() {
+    if (!summary) return;
+
+    const escapeCsvCell = (value: string | number) =>
+      `"${String(value).replaceAll('"', '""')}"`;
+    const rows: Array<Array<string | number>> = [
+      ["Retail Operations Report"],
+      ["Generated at", new Date().toISOString()],
+      [],
+      ["Business overview"],
+      ["Revenue", "Orders", "Products", "Low stock items"],
+      [summary.revenue.toFixed(2), summary.totalOrders, summary.totalProducts, summary.lowStockItems],
+      [],
+      ["Orders"],
+      ["Order", "Customer", "Status", "Total", "Created at"],
+      ...orders.map((order) => [order.orderNumber, order.customerName, order.status, order.total.toFixed(2), new Date(order.createdAt).toISOString()]),
+      [],
+      ["Inventory"],
+      ["SKU", "Product", "Category", "Price", "Stock", "Reorder level", "Stock status"],
+      ...products.map((product) => [product.sku, product.name, product.category, product.price.toFixed(2), product.stock, product.reorderLevel, product.stock <= product.reorderLevel ? "Reorder" : "In stock"]),
+    ];
+    const csv = rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `retail-operations-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API_URL}/dashboard`).then((response) => response.json()),
-      fetch(`${API_URL}/products`).then((response) => response.json()),
-      fetch(`${API_URL}/orders`).then((response) => response.json()),
+      fetchJson<DashboardSummary>("/dashboard"),
+      fetchJson<Product[]>("/products"),
+      fetchJson<Order[]>("/orders"),
     ])
       .then(([summaryData, productsData, ordersData]) => {
         setSummary(summaryData);
@@ -59,7 +104,9 @@ function App() {
             <h1>Good morning, Edward.</h1>
             <p>Here is what is happening across the store today.</p>
           </div>
-          <button type="button" className="secondary-button">Export report</button>
+          <button type="button" className="secondary-button" onClick={exportReport} disabled={!summary}>
+            Export report
+          </button>
         </header>
 
         {error && <div className="error-banner" role="alert">{error}</div>}
@@ -88,15 +135,25 @@ function App() {
                 <p className="eyebrow">Fulfillment</p>
                 <h2 id="orders-title">Recent orders</h2>
               </div>
-              <button className="text-button" type="button">View all</button>
+              {orders.length > 3 && (
+                <button
+                  className="text-button"
+                  type="button"
+                  aria-expanded={showAllOrders}
+                  aria-controls="orders-table"
+                  onClick={() => setShowAllOrders((current) => !current)}
+                >
+                  {showAllOrders ? "Show recent" : "View all"}
+                </button>
+              )}
             </div>
-            <div className="table-wrap">
+            <div className="table-wrap" id="orders-table">
               <table>
                 <thead>
                   <tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th><th>Date</th></tr>
                 </thead>
                 <tbody>
-                  {orders.map((order) => (
+                  {visibleOrders.map((order) => (
                     <tr key={order.id}>
                       <td className="strong">{order.orderNumber}</td>
                       <td>{order.customerName}</td>
@@ -152,4 +209,3 @@ function MetricCard({ label, value, trend, alert = false }: { label: string; val
 }
 
 export default App;
-

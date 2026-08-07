@@ -2,6 +2,9 @@
   "name": "retail-operations-dashboard",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "pnpm --parallel --filter ./apps/* dev",
     "build": "pnpm --recursive build",
@@ -9,4 +12,3 @@
   },
   "packageManager": "pnpm@10.15.0"
 }
-
