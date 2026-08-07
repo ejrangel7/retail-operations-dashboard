@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "pnpm --parallel --filter ./apps/* dev",
     "build": "pnpm --recursive build",
-    "typecheck": "pnpm --recursive typecheck"
+    "typecheck": "pnpm --recursive typecheck",
+    "verify": "pnpm typecheck && pnpm build"
   },
   "packageManager": "pnpm@10.15.0"
 }
