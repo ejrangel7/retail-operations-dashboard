@@ -87,7 +87,10 @@ describe("App", () => {
 
     await user.type(screen.getByPlaceholderText("Order or customer"), "Customer 1");
     await user.selectOptions(screen.getByLabelText("Status"), "processing");
-    await user.click(within(screen.getByRole("form", { name: "Filter orders" })).getByRole("button", { name: "Apply" }));
+    const applyOrderSearch = within(screen.getByRole("form", { name: "Filter orders" })).getByRole("button", { name: "Apply order search" });
+    expect(applyOrderSearch).toHaveAttribute("title", "Apply search");
+    expect(screen.getByRole("button", { name: "Apply inventory search" })).toHaveAttribute("title", "Apply search");
+    await user.click(applyOrderSearch);
 
     await waitFor(() => {
       const fetchMock = vi.mocked(fetch);
