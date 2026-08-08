@@ -144,7 +144,11 @@ td.strong { color: var(--ink); font-weight: 700; }
   font-weight: 700;
 }
 .pagination button:hover:not(:disabled) { border-color: #9cb0a2; }
-.results-meta { margin: 0 0 14px; color: var(--muted); font-size: 11px; }
+.filter-summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.results-meta { margin: 0; color: var(--muted); font-size: 11px; }
+.filter-reset { border: 0; padding: 0; background: transparent; color: var(--green); font-size: 11px; font-weight: 700; }
+.filter-reset:hover { text-decoration: underline; }
+.filter-reset:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
 .pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 18px; color: var(--muted); font-size: 12px; }
 .pagination button:disabled { cursor: not-allowed; opacity: .45; }
 .empty-state { padding: 22px 8px; color: var(--muted); text-align: center; }
