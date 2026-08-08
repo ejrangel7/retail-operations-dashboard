@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createCsvReport, reportFilename } from "./report";
 import type { DashboardSummary, Order, Product } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
@@ -37,29 +38,12 @@ function App() {
   function exportReport() {
     if (!summary) return;
 
-    const escapeCsvCell = (value: string | number) =>
-      `"${String(value).replaceAll('"', '""')}"`;
-    const rows: Array<Array<string | number>> = [
-      ["Retail Operations Report"],
-      ["Generated at", new Date().toISOString()],
-      [],
-      ["Business overview"],
-      ["Revenue", "Orders", "Products", "Low stock items"],
-      [summary.revenue.toFixed(2), summary.totalOrders, summary.totalProducts, summary.lowStockItems],
-      [],
-      ["Orders"],
-      ["Order", "Customer", "Status", "Total", "Created at"],
-      ...orders.map((order) => [order.orderNumber, order.customerName, order.status, order.total.toFixed(2), new Date(order.createdAt).toISOString()]),
-      [],
-      ["Inventory"],
-      ["SKU", "Product", "Category", "Price", "Stock", "Reorder level", "Stock status"],
-      ...products.map((product) => [product.sku, product.name, product.category, product.price.toFixed(2), product.stock, product.reorderLevel, product.stock <= product.reorderLevel ? "Reorder" : "In stock"]),
-    ];
-    const csv = rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n");
+    const now = new Date();
+    const csv = createCsvReport(summary, orders, products, now);
     const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = `retail-operations-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = reportFilename(now);
     document.body.appendChild(link);
     link.click();
     link.remove();

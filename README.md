@@ -109,8 +109,8 @@ retail-operations-dashboard/
 - [ ] Filtering and pagination
 - [ ] Create and update order workflows
 - [ ] Authentication and role-based access
-- [ ] Unit and integration tests
-- [ ] GitHub Actions continuous integration
+- [x] Unit and integration tests
+- [x] GitHub Actions continuous integration
 - [ ] Accessible charts and reporting
 - [ ] Low-cost or zero-cost deployment evaluation
 
