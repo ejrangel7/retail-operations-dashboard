@@ -79,7 +79,7 @@ describe("App", () => {
     expect(screen.getByRole("navigation", { name: "Products pagination" })).toHaveTextContent("Page 2 of 2");
   });
 
-  it("applies order search and status filters", async () => {
+  it("applies order search and resets the status filter", async () => {
     mockDashboardRequests();
     const user = userEvent.setup();
     render(<App />);
@@ -96,10 +96,40 @@ describe("App", () => {
       const fetchMock = vi.mocked(fetch);
       expect(fetchMock.mock.calls.some(([input]) => {
         const url = String(input);
-        return url.includes("search=Customer+1") && url.includes("status=processing");
+        return url.includes("/orders?") && url.includes("search=Customer+1") && !url.includes("status=");
       })).toBe(true);
     });
+    expect(screen.getByLabelText("Status")).toHaveValue("all");
     expect(screen.getByText("1 matching orders")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Reset order filters" }));
+    expect(screen.getByPlaceholderText("Order or customer")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Reset order filters" })).not.toBeInTheDocument();
+  });
+
+  it("submits inventory search with Enter, resets stock, and clears all filters", async () => {
+    mockDashboardRequests();
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Product 1");
+
+    const productSearch = screen.getByPlaceholderText("SKU or product");
+    await user.type(productSearch, "Product 1");
+    await user.selectOptions(screen.getByLabelText("Stock"), "low");
+    await user.type(productSearch, "{Enter}");
+
+    await waitFor(() => {
+      const fetchMock = vi.mocked(fetch);
+      expect(fetchMock.mock.calls.some(([input]) => {
+        const url = String(input);
+        return url.includes("/products?") && url.includes("search=Product+1") && !url.includes("stock=");
+      })).toBe(true);
+    });
+    expect(screen.getByLabelText("Stock")).toHaveValue("all");
+
+    await user.click(screen.getByRole("button", { name: "Reset inventory filters" }));
+    expect(productSearch).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Reset inventory filters" })).not.toBeInTheDocument();
   });
 
   it("shows useful feedback when API requests fail", async () => {

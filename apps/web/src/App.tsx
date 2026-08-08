@@ -194,7 +194,7 @@ function App() {
               )}
             </div>
             <form className="filters" aria-label="Filter orders" onSubmit={(event) => {
-              event.preventDefault(); setOrderSearch(orderSearchInput.trim()); setOrderPage(1); setShowAllOrders(false);
+              event.preventDefault(); setOrderSearch(orderSearchInput.trim()); setOrderStatus("all"); setOrderPage(1); setShowAllOrders(false);
             }}>
               <div className="filter-field"><label htmlFor="order-search">Search</label>
                 <div className="search-control">
@@ -211,7 +211,14 @@ function App() {
                 </select>
               </label>
             </form>
-            <p className="results-meta" aria-live="polite">{orderPagination.total} matching orders</p>
+            <div className="filter-summary">
+              <p className="results-meta" aria-live="polite">{orderPagination.total} matching orders</p>
+              {(orderSearchInput || orderSearch || orderStatus !== "all") && (
+                <button className="filter-reset" type="button" aria-label="Reset order filters" onClick={() => {
+                  setOrderSearchInput(""); setOrderSearch(""); setOrderStatus("all"); setOrderPage(1); setShowAllOrders(false);
+                }}>Reset filters</button>
+              )}
+            </div>
             <div className="table-wrap" id="orders-table">
               <table>
                 <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th><th>Date</th></tr></thead>
@@ -231,7 +238,7 @@ function App() {
           <section id="inventory" className="panel inventory-panel" aria-labelledby="inventory-title">
             <div className="panel-heading"><div><p className="eyebrow">Inventory</p><h2 id="inventory-title">Stock watch</h2></div></div>
             <form className="filters" aria-label="Filter inventory" onSubmit={(event) => {
-              event.preventDefault(); setProductSearch(productSearchInput.trim()); setProductPage(1);
+              event.preventDefault(); setProductSearch(productSearchInput.trim()); setStockFilter("all"); setProductPage(1);
             }}>
               <div className="filter-field"><label htmlFor="product-search">Search</label>
                 <div className="search-control">
@@ -247,7 +254,14 @@ function App() {
                 </select>
               </label>
             </form>
-            <p className="results-meta" aria-live="polite">{productPagination.total} matching products</p>
+            <div className="filter-summary">
+              <p className="results-meta" aria-live="polite">{productPagination.total} matching products</p>
+              {(productSearchInput || productSearch || stockFilter !== "all") && (
+                <button className="filter-reset" type="button" aria-label="Reset inventory filters" onClick={() => {
+                  setProductSearchInput(""); setProductSearch(""); setStockFilter("all"); setProductPage(1);
+                }}>Reset filters</button>
+              )}
+            </div>
             <div className="product-list">
               {products.map((product) => {
                 const low = product.stock <= product.reorderLevel;
