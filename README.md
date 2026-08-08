@@ -99,6 +99,8 @@ retail-operations-dashboard/
 | GET | `/api/dashboard` | Summary metrics |
 | GET | `/api/products` | Filtered and paginated inventory data |
 | GET | `/api/orders` | Filtered and paginated orders |
+| POST | `/api/orders` | Create a validated order |
+| PATCH | `/api/orders/:id` | Update fulfillment status |
 
 ### Collection query parameters
 
@@ -114,7 +116,7 @@ retail-operations-dashboard/
 - [x] PostgreSQL schema and fictional seed data
 - [x] Docker Compose environment
 - [x] Server-side filtering and pagination
-- [ ] Create and update order workflows
+- [x] Create and update order workflows
 - [ ] Authentication and role-based access
 - [x] Unit and integration tests
 - [x] GitHub Actions continuous integration

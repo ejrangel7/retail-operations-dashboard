@@ -29,8 +29,21 @@ function page<T>(items: T[], currentPage: number, pageSize: number, total: numbe
 }
 
 function mockDashboardRequests() {
-  vi.stubGlobal("fetch", vi.fn((input: string | URL | Request) => {
+  vi.stubGlobal("fetch", vi.fn((input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
+    const method = init?.method ?? "GET";
+    if (method === "POST" && url.pathname.endsWith("/orders")) {
+      const body = JSON.parse(String(init?.body));
+      return Promise.resolve(new Response(JSON.stringify({
+        id: 5,
+        ...body,
+        createdAt: "2026-08-08T12:00:00.000Z",
+      }), { status: 201 }));
+    }
+    if (method === "PATCH" && url.pathname.includes("/orders/")) {
+      const body = JSON.parse(String(init?.body));
+      return Promise.resolve(new Response(JSON.stringify({ ...orders[0], ...body })));
+    }
     if (url.pathname.endsWith("/dashboard")) {
       return Promise.resolve(new Response(JSON.stringify({ totalProducts: 4, totalOrders: 4, revenue: 106, lowStockItems: 3 })));
     }
@@ -130,6 +143,44 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Reset inventory filters" }));
     expect(productSearch).toHaveValue("");
     expect(screen.queryByRole("button", { name: "Reset inventory filters" })).not.toBeInTheDocument();
+  });
+
+  it("creates an order from the dashboard form", async () => {
+    mockDashboardRequests();
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("ORD-001");
+
+    await user.click(screen.getByRole("button", { name: "New order" }));
+    const form = screen.getByRole("form", { name: "Create order" });
+    await user.type(within(form).getByLabelText("Order number"), "BT-1049");
+    await user.type(within(form).getByLabelText("Customer"), "Sample Customer F");
+    await user.type(within(form).getByLabelText("Total"), "84.50");
+    await user.click(within(form).getByRole("button", { name: "Create order" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Order BT-1049 created successfully.");
+    const postCall = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === "POST");
+    expect(postCall).toBeDefined();
+    expect(JSON.parse(String(postCall?.[1]?.body))).toEqual({
+      orderNumber: "BT-1049",
+      customerName: "Sample Customer F",
+      status: "processing",
+      total: 84.5,
+    });
+  });
+
+  it("updates fulfillment status from the orders table", async () => {
+    mockDashboardRequests();
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("ORD-001");
+
+    await user.selectOptions(screen.getByLabelText("Update status for ORD-001"), "shipped");
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Order ORD-001 updated to shipped.");
+    const patchCall = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === "PATCH");
+    expect(patchCall?.[0].toString()).toContain("/orders/1");
+    expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({ status: "shipped" });
   });
 
   it("shows useful feedback when API requests fail", async () => {

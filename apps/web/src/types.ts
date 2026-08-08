@@ -15,13 +15,22 @@ export type Product = {
   reorderLevel: number;
 };
 
+export type OrderStatus = "processing" | "shipped" | "delivered";
+
 export type Order = {
   id: number;
   orderNumber: string;
   customerName: string;
-  status: "processing" | "shipped" | "delivered";
+  status: OrderStatus;
   total: number;
   createdAt: string;
+};
+
+export type CreateOrderInput = {
+  orderNumber: string;
+  customerName: string;
+  status: OrderStatus;
+  total: number;
 };
 
 export type Pagination = {
