@@ -97,8 +97,15 @@ retail-operations-dashboard/
 | --- | --- | --- |
 | GET | `/api/health` | API and database health |
 | GET | `/api/dashboard` | Summary metrics |
-| GET | `/api/products` | Inventory data |
-| GET | `/api/orders` | Recent orders |
+| GET | `/api/products` | Filtered and paginated inventory data |
+| GET | `/api/orders` | Filtered and paginated orders |
+
+### Collection query parameters
+
+- Both collection endpoints accept `page`, `pageSize` (maximum 100), and `search`.
+- Orders accept `status=processing|shipped|delivered`.
+- Products accept `stock=low|in-stock`.
+- Collection responses include `items` plus page, page size, total results, and total pages.
 
 ## Roadmap
 
@@ -106,7 +113,7 @@ retail-operations-dashboard/
 - [x] Dashboard, product, and order read models
 - [x] PostgreSQL schema and fictional seed data
 - [x] Docker Compose environment
-- [ ] Filtering and pagination
+- [x] Server-side filtering and pagination
 - [ ] Create and update order workflows
 - [ ] Authentication and role-based access
 - [x] Unit and integration tests
