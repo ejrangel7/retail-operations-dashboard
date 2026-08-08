@@ -196,16 +196,20 @@ function App() {
             <form className="filters" aria-label="Filter orders" onSubmit={(event) => {
               event.preventDefault(); setOrderSearch(orderSearchInput.trim()); setOrderPage(1); setShowAllOrders(false);
             }}>
-              <label className="filter-field"><span>Search</span>
-                <input value={orderSearchInput} onChange={(event) => setOrderSearchInput(event.target.value)} placeholder="Order or customer" />
-              </label>
+              <div className="filter-field"><label htmlFor="order-search">Search</label>
+                <div className="search-control">
+                  <input id="order-search" value={orderSearchInput} onChange={(event) => setOrderSearchInput(event.target.value)} placeholder="Order or customer" />
+                  <button className="search-submit" type="submit" aria-label="Apply order search" title="Apply search">
+                    <SearchIcon />
+                  </button>
+                </div>
+              </div>
               <label className="filter-field"><span>Status</span>
                 <select value={orderStatus} onChange={(event) => { setOrderStatus(event.target.value); setOrderPage(1); setShowAllOrders(false); }}>
                   <option value="all">All statuses</option><option value="processing">Processing</option>
                   <option value="shipped">Shipped</option><option value="delivered">Delivered</option>
                 </select>
               </label>
-              <button className="filter-submit" type="submit">Apply</button>
             </form>
             <p className="results-meta" aria-live="polite">{orderPagination.total} matching orders</p>
             <div className="table-wrap" id="orders-table">
@@ -229,15 +233,19 @@ function App() {
             <form className="filters" aria-label="Filter inventory" onSubmit={(event) => {
               event.preventDefault(); setProductSearch(productSearchInput.trim()); setProductPage(1);
             }}>
-              <label className="filter-field"><span>Search</span>
-                <input value={productSearchInput} onChange={(event) => setProductSearchInput(event.target.value)} placeholder="SKU or product" />
-              </label>
+              <div className="filter-field"><label htmlFor="product-search">Search</label>
+                <div className="search-control">
+                  <input id="product-search" value={productSearchInput} onChange={(event) => setProductSearchInput(event.target.value)} placeholder="SKU or product" />
+                  <button className="search-submit" type="submit" aria-label="Apply inventory search" title="Apply search">
+                    <SearchIcon />
+                  </button>
+                </div>
+              </div>
               <label className="filter-field"><span>Stock</span>
                 <select value={stockFilter} onChange={(event) => { setStockFilter(event.target.value); setProductPage(1); }}>
                   <option value="all">All stock</option><option value="low">Reorder</option><option value="in-stock">In stock</option>
                 </select>
               </label>
-              <button className="filter-submit" type="submit">Apply</button>
             </form>
             <p className="results-meta" aria-live="polite">{productPagination.total} matching products</p>
             <div className="product-list">
@@ -256,6 +264,13 @@ function App() {
       </main>
     </div>
   );
+}
+
+function SearchIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-4-4" />
+  </svg>;
 }
 
 function PaginationControls({ label, pagination, onPageChange }: {
