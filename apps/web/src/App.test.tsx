@@ -9,7 +9,6 @@ const orders = Array.from({ length: 4 }, (_, index) => ({
   id: index + 1,
   orderNumber: `ORD-00${index + 1}`,
   customerName: `Customer ${index + 1}`,
-  sku: `SKU-00${index + 1}`,
   status: "processing" as const,
   total: 25 + index,
   createdAt: "2026-08-07T12:00:00.000Z",
@@ -154,10 +153,17 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: "New order" }));
     const form = screen.getByRole("form", { name: "Create order" });
-    await user.type(within(form).getByLabelText("Order number"), "BT-1049");
+    const orderNumber = within(form).getByLabelText("Order number");
+    await user.type(orderNumber, "1049");
+    expect(orderNumber).toHaveAttribute("aria-invalid", "true");
+    expect(orderNumber).toHaveClass("input-danger");
+    expect(within(form).getByRole("alert")).toHaveTextContent("Order number must use the format BT-0000.");
+    await user.clear(orderNumber);
+    await user.type(orderNumber, "bt-1049");
+    expect(orderNumber).toHaveValue("BT-1049");
+    expect(orderNumber).toHaveAttribute("aria-invalid", "false");
+    expect(within(form).queryByRole("alert")).not.toBeInTheDocument();
     await user.type(within(form).getByLabelText("Customer"), "Sample Customer F");
-    await user.type(within(form).getByLabelText("SKU"), "sku-001");
-    expect(within(form).getByLabelText("SKU")).toHaveValue("SKU-001");
     await user.type(within(form).getByLabelText("Total"), "84.50");
     await user.click(within(form).getByRole("button", { name: "Create order" }));
 
@@ -167,7 +173,6 @@ describe("App", () => {
     expect(JSON.parse(String(postCall?.[1]?.body))).toEqual({
       orderNumber: "BT-1049",
       customerName: "Sample Customer F",
-      sku: "SKU-001",
       status: "processing",
       total: 84.5,
     });

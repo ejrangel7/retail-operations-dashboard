@@ -21,7 +21,6 @@ export type Order = {
   id: number;
   orderNumber: string;
   customerName: string;
-  sku: string;
   status: OrderStatus;
   total: number;
   createdAt: string;
@@ -30,7 +29,6 @@ export type Order = {
 export type CreateOrderInput = {
   orderNumber: string;
   customerName: string;
-  sku: string;
   status: OrderStatus;
   total: number;
 };

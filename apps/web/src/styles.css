@@ -13,6 +13,8 @@
   --line: #dfe6df;
   --surface: #ffffff;
   --warning: #a34b26;
+  --danger: #b42318;
+  --danger-soft: #fff1f0;
 }
 
 * { box-sizing: border-box; }
@@ -117,6 +119,8 @@ td.strong { color: var(--ink); font-weight: 700; }
 .order-form label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .order-form input, .order-form select { min-width: 0; width: 100%; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); padding: 9px 10px; }
 .order-form input:focus, .order-form select:focus { outline: 0; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+.order-form input.input-danger, .order-form input.input-danger:focus { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+.field-error { color: var(--danger); font-size: 11px; font-weight: 600; line-height: 1.35; }
 .order-form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .action-message { margin: -8px 0 16px; color: var(--green); font-size: 12px; font-weight: 700; }
 

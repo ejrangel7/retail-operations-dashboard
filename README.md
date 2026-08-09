@@ -102,11 +102,9 @@ retail-operations-dashboard/
 | POST | `/api/orders` | Create a validated order |
 | PATCH | `/api/orders/:id` | Update fulfillment status |
 
-### SKU convention
+### Order number convention
 
-SKUs contain 3 to 32 uppercase letters and numbers arranged in at least two hyphen-separated segments. Spaces, consecutive hyphens, and leading or trailing hyphens are rejected. Examples: `TEE-BLK-M`, `MUG-CAT`, and `SKU-001`.
-
-Order creation normalizes SKU input to uppercase and verifies that the SKU exists in the product catalog before storing the order.
+Order numbers must use the exact format `BT-0000`: the uppercase prefix `BT-` followed by exactly four digits. Example: `BT-1049`. The rule is enforced by the form, API, and PostgreSQL for new orders.
 
 ### Collection query parameters
 

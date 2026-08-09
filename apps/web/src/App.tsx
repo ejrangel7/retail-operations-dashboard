@@ -287,10 +287,10 @@ function App() {
             </div>
             <div className="table-wrap" id="orders-table">
               <table>
-                <thead><tr><th>Order</th><th>Customer</th><th>SKU</th><th>Status</th><th>Total</th><th>Date</th></tr></thead>
+                <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th><th>Date</th></tr></thead>
                 <tbody>
                   {orders.map((order) => (
-                    <tr key={order.id}><td className="strong">{order.orderNumber}</td><td>{order.customerName}</td><td>{order.sku}</td>
+                    <tr key={order.id}><td className="strong">{order.orderNumber}</td><td>{order.customerName}</td>
                       <td><select className={`status-select ${order.status}`} aria-label={`Update status for ${order.orderNumber}`}
                         value={order.status} disabled={savingOrderId === order.id}
                         onChange={(event) => updateOrderStatus(order, event.target.value as OrderStatus)}>
@@ -300,7 +300,7 @@ function App() {
                       </select></td>
                       <td>{money.format(order.total)}</td><td>{date.format(new Date(order.createdAt))}</td></tr>
                   ))}
-                  {orders.length === 0 && <tr><td className="empty-state" colSpan={6}>No orders match these filters.</td></tr>}
+                  {orders.length === 0 && <tr><td className="empty-state" colSpan={5}>No orders match these filters.</td></tr>}
                 </tbody>
               </table>
             </div>
