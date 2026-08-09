@@ -3,11 +3,13 @@ import type { CreateOrderInput, OrderStatus } from "./types";
 
 type Props = {
   saving: boolean;
+  error: string;
+  onErrorDismiss: () => void;
   onCancel: () => void;
   onSubmit: (input: CreateOrderInput) => Promise<void>;
 };
 
-export function NewOrderForm({ saving, onCancel, onSubmit }: Props) {
+export function NewOrderForm({ saving, error, onErrorDismiss, onCancel, onSubmit }: Props) {
   const [orderNumber, setOrderNumber] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [status, setStatus] = useState<OrderStatus>("processing");
@@ -28,7 +30,7 @@ export function NewOrderForm({ saving, onCancel, onSubmit }: Props) {
         <label>Order number
           <input
             value={orderNumber}
-            onChange={(event) => setOrderNumber(event.target.value.toUpperCase())}
+            onChange={(event) => { setOrderNumber(event.target.value.toUpperCase()); onErrorDismiss(); }}
             placeholder="BT-1049"
             pattern="BT-[0-9]{4}"
             minLength={7}
@@ -61,9 +63,18 @@ export function NewOrderForm({ saving, onCancel, onSubmit }: Props) {
           <input type="number" value={total} onChange={(event) => setTotal(event.target.value)} min="0.01" max="99999999.99" step="0.01" placeholder="0.00" required />
         </label>
       </div>
-      <div className="order-form-actions">
-        <button className="secondary-button" type="button" onClick={onCancel} disabled={saving}>Cancel</button>
-        <button className="primary-button" type="submit" disabled={saving}>{saving ? "Creating..." : "Create order"}</button>
+      <div className="order-form-footer">
+        <p
+          className="order-form-submit-error"
+          role={error ? "alert" : undefined}
+          aria-live="polite"
+        >
+          {error || "\u00a0"}
+        </p>
+        <div className="order-form-actions">
+          <button className="secondary-button" type="button" onClick={onCancel} disabled={saving}>Cancel</button>
+          <button className="primary-button" type="submit" disabled={saving}>{saving ? "Creating..." : "Create order"}</button>
+        </div>
       </div>
     </form>
   );

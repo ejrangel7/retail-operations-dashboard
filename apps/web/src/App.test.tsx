@@ -28,11 +28,14 @@ function page<T>(items: T[], currentPage: number, pageSize: number, total: numbe
   return { items, pagination: { page: currentPage, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) } };
 }
 
-function mockDashboardRequests() {
+function mockDashboardRequests(duplicateOrder = false) {
   vi.stubGlobal("fetch", vi.fn((input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
     const method = init?.method ?? "GET";
     if (method === "POST" && url.pathname.endsWith("/orders")) {
+      if (duplicateOrder) {
+        return Promise.resolve(new Response(JSON.stringify({ message: "An order with this number already exists" }), { status: 409 }));
+      }
       const body = JSON.parse(String(init?.body));
       return Promise.resolve(new Response(JSON.stringify({
         id: 5,
@@ -176,6 +179,30 @@ describe("App", () => {
       status: "processing",
       total: 84.5,
     });
+  });
+
+  it("shows duplicate order feedback in the reserved form footer", async () => {
+    mockDashboardRequests(true);
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("ORD-001");
+
+    await user.click(screen.getByRole("button", { name: "New order" }));
+    const form = screen.getByRole("form", { name: "Create order" });
+    const errorSlot = form.querySelector(".order-form-submit-error");
+    expect(errorSlot).toBeInTheDocument();
+    expect(errorSlot).not.toHaveAttribute("role", "alert");
+
+    await user.type(within(form).getByLabelText("Order number"), "BT-1048");
+    await user.type(within(form).getByLabelText("Customer"), "Sample Customer");
+    await user.type(within(form).getByLabelText("Total"), "7.00");
+    await user.click(within(form).getByRole("button", { name: "Create order" }));
+
+    expect(await within(form).findByRole("alert")).toHaveTextContent("An order with this number already exists");
+    expect(form.querySelector(".order-form-submit-error")).toBe(errorSlot);
+    expect(document.querySelector(".error-banner")).not.toBeInTheDocument();
+    expect(within(form).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(within(form).getByRole("button", { name: "Create order" })).toBeInTheDocument();
   });
 
   it("updates fulfillment status from the orders table", async () => {

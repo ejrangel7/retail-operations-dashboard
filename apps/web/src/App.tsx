@@ -86,6 +86,7 @@ function App() {
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [savingOrderId, setSavingOrderId] = useState<number | null>(null);
   const [orderActionMessage, setOrderActionMessage] = useState("");
+  const [orderFormError, setOrderFormError] = useState("");
   const [dataVersion, setDataVersion] = useState(0);
 
   useEffect(() => {
@@ -135,6 +136,7 @@ function App() {
     setCreatingOrder(true);
     setError("");
     setOrderActionMessage("");
+    setOrderFormError("");
     try {
       const created = await sendJson<Order>("/orders", "POST", input);
       setOrderActionMessage(`Order ${created.orderNumber} created successfully.`);
@@ -146,7 +148,7 @@ function App() {
       setShowAllOrders(false);
       setDataVersion((current) => current + 1);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "The order could not be created.");
+      setOrderFormError(requestError instanceof Error ? requestError.message : "The order could not be created.");
     } finally {
       setCreatingOrder(false);
     }
@@ -246,7 +248,7 @@ function App() {
               <div><p className="eyebrow">Fulfillment</p><h2 id="orders-title">Orders</h2></div>
               <div className="panel-actions">
                 <button className="text-button" type="button" aria-expanded={showOrderForm} aria-controls="new-order-form"
-                  onClick={() => { setShowOrderForm((current) => !current); setOrderActionMessage(""); }}>
+                  onClick={() => { setShowOrderForm((current) => !current); setOrderActionMessage(""); setOrderFormError(""); }}>
                   {showOrderForm ? "Close form" : "New order"}
                 </button>
                 {orderPagination.total > PAGE_SIZE && (
@@ -257,7 +259,15 @@ function App() {
                 )}
               </div>
             </div>
-            {showOrderForm && <NewOrderForm saving={creatingOrder} onCancel={() => setShowOrderForm(false)} onSubmit={createOrder} />}
+            {showOrderForm && (
+              <NewOrderForm
+                saving={creatingOrder}
+                error={orderFormError}
+                onErrorDismiss={() => setOrderFormError("")}
+                onCancel={() => { setShowOrderForm(false); setOrderFormError(""); }}
+                onSubmit={createOrder}
+              />
+            )}
             {orderActionMessage && <p className="action-message" role="status">{orderActionMessage}</p>}
             <form className="filters" aria-label="Filter orders" onSubmit={(event) => {
               event.preventDefault(); setOrderSearch(orderSearchInput.trim()); setOrderStatus("all"); setOrderPage(1); setShowAllOrders(false);
