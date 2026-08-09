@@ -38,11 +38,14 @@ export function NewOrderForm({ saving, onCancel, onSubmit }: Props) {
             className={orderNumberIsInvalid ? "input-danger" : undefined}
             required
           />
-          {orderNumberIsInvalid && (
-            <span id="order-number-error" className="field-error" role="alert">
-              Order number must use the format BT-0000.
-            </span>
-          )}
+          <span
+            id="order-number-error"
+            className="field-error"
+            role={orderNumberIsInvalid ? "alert" : undefined}
+            aria-live="polite"
+          >
+            {orderNumberIsInvalid ? "Order number must use the format BT-0000." : "\u00a0"}
+          </span>
         </label>
         <label>Customer
           <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Customer name" minLength={2} maxLength={120} required />

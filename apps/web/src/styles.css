@@ -115,12 +115,12 @@ td.strong { color: var(--ink); font-weight: 700; }
 
 
 .order-form { margin: -6px 0 22px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: #f8faf8; }
-.order-form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.order-form label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 600; }
+.order-form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.order-form label { display: grid; gap: 5px; align-content: start; color: var(--muted); font-size: 11px; font-weight: 600; }
 .order-form input, .order-form select { min-width: 0; width: 100%; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); padding: 9px 10px; }
 .order-form input:focus, .order-form select:focus { outline: 0; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
 .order-form input.input-danger, .order-form input.input-danger:focus { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
-.field-error { color: var(--danger); font-size: 11px; font-weight: 600; line-height: 1.35; }
+.field-error { min-height: 2.7em; color: var(--danger); font-size: 11px; font-weight: 600; line-height: 1.35; }
 .order-form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .action-message { margin: -8px 0 16px; color: var(--green); font-size: 12px; font-weight: 700; }
 
