@@ -79,6 +79,7 @@ function App() {
   const [orderPage, setOrderPage] = useState(1);
   const [productPage, setProductPage] = useState(1);
   const [showAllOrders, setShowAllOrders] = useState(false);
+  const [showAllProducts, setShowAllProducts] = useState(false);
   const [orderSearchInput, setOrderSearchInput] = useState("");
   const [orderSearch, setOrderSearch] = useState("");
   const [orderStatus, setOrderStatus] = useState("all");
@@ -130,8 +131,9 @@ function App() {
   useEffect(() => {
     if (!currentUser) return;
     const controller = new AbortController();
+    const pageSize = showAllProducts ? 100 : PAGE_SIZE;
     fetchJson<PaginatedResponse<Product>>(
-      collectionPath("products", productPage, PAGE_SIZE, productSearch, "stock", stockFilter),
+      collectionPath("products", productPage, pageSize, productSearch, "stock", stockFilter),
       controller.signal,
     )
       .then((result) => {
@@ -144,13 +146,20 @@ function App() {
         }
       });
     return () => controller.abort();
-  }, [currentUser, productPage, productSearch, stockFilter]);
+  }, [currentUser, productPage, productSearch, showAllProducts, stockFilter]);
+
+  function clearWorkspaceFeedback() {
+    setError("");
+    setOrderActionMessage("");
+    setOrderFormError("");
+  }
 
   async function login(email: string, password: string) {
     setLoggingIn(true);
     setLoginError("");
     try {
       const user = await sendJson<AuthUser>("/auth/login", "POST", { email, password });
+      clearWorkspaceFeedback();
       setCurrentUser(user);
     } catch (requestError) {
       setLoginError(requestError instanceof Error ? requestError.message : "Sign in failed.");
@@ -167,7 +176,7 @@ function App() {
       setSummary(null);
       setOrders([]);
       setProducts([]);
-      setError("");
+      clearWorkspaceFeedback();
       setShowOrderForm(false);
     }
   }
@@ -377,9 +386,17 @@ function App() {
           </section>
 
           <section id="inventory" className="panel inventory-panel" aria-labelledby="inventory-title">
-            <div className="panel-heading"><div><p className="eyebrow">Inventory</p><h2 id="inventory-title">Stock watch</h2></div></div>
+            <div className="panel-heading">
+              <div><p className="eyebrow">Inventory</p><h2 id="inventory-title">Stock watch</h2></div>
+              {productPagination.total > PAGE_SIZE && (
+                <button className="text-button" type="button" aria-expanded={showAllProducts} aria-controls="products-list"
+                  onClick={() => { setShowAllProducts((current) => !current); setProductPage(1); }}>
+                  {showAllProducts ? "Show pages" : "View all"}
+                </button>
+              )}
+            </div>
             <form className="filters" aria-label="Filter inventory" onSubmit={(event) => {
-              event.preventDefault(); setProductSearch(productSearchInput.trim()); setStockFilter("all"); setProductPage(1);
+              event.preventDefault(); setProductSearch(productSearchInput.trim()); setStockFilter("all"); setProductPage(1); setShowAllProducts(false);
             }}>
               <div className="filter-field"><label htmlFor="product-search">Search</label>
                 <div className="search-control">
@@ -390,7 +407,7 @@ function App() {
                 </div>
               </div>
               <label className="filter-field"><span>Stock</span>
-                <select value={stockFilter} onChange={(event) => { setStockFilter(event.target.value); setProductPage(1); }}>
+                <select value={stockFilter} onChange={(event) => { setStockFilter(event.target.value); setProductPage(1); setShowAllProducts(false); }}>
                   <option value="all">All stock</option><option value="low">Reorder</option><option value="in-stock">In stock</option>
                 </select>
               </label>
@@ -399,11 +416,11 @@ function App() {
               <p className="results-meta" aria-live="polite">{productPagination.total} matching products</p>
               {(productSearchInput || productSearch || stockFilter !== "all") && (
                 <button className="filter-reset" type="button" aria-label="Reset inventory filters" onClick={() => {
-                  setProductSearchInput(""); setProductSearch(""); setStockFilter("all"); setProductPage(1);
+                  setProductSearchInput(""); setProductSearch(""); setStockFilter("all"); setProductPage(1); setShowAllProducts(false);
                 }}>Reset filters</button>
               )}
             </div>
-            <div className="product-list">
+            <div className="product-list" id="products-list">
               {products.map((product) => {
                 const low = product.stock <= product.reorderLevel;
                 return <article className="product-row" key={product.id}>
@@ -413,7 +430,7 @@ function App() {
               })}
               {products.length === 0 && <p className="empty-state">No products match these filters.</p>}
             </div>
-            <PaginationControls label="Products" pagination={productPagination} onPageChange={setProductPage} />
+            {!showAllProducts && <PaginationControls label="Products" pagination={productPagination} onPageChange={setProductPage} />}
           </section>
         </div>
       </main>

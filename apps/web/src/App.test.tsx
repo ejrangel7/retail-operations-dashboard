@@ -32,7 +32,7 @@ function page<T>(items: T[], currentPage: number, pageSize: number, total: numbe
   return { items, pagination: { page: currentPage, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) } };
 }
 
-function mockDashboardRequests(duplicateOrder = false, authenticatedUser = operatorUser) {
+function mockDashboardRequests(duplicateOrder = false, authenticatedUser = operatorUser, loginUser = authenticatedUser) {
   vi.stubGlobal("fetch", vi.fn((input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
     const method = init?.method ?? "GET";
@@ -40,6 +40,9 @@ function mockDashboardRequests(duplicateOrder = false, authenticatedUser = opera
       return Promise.resolve(new Response(JSON.stringify(authenticatedUser)));
     }
     if (url.pathname.endsWith("/auth/logout")) return Promise.resolve(new Response(null, { status: 204 }));
+    if (method === "POST" && url.pathname.endsWith("/auth/login")) {
+      return Promise.resolve(new Response(JSON.stringify(loginUser)));
+    }
     if (method === "POST" && url.pathname.endsWith("/orders")) {
       if (duplicateOrder) {
         return Promise.resolve(new Response(JSON.stringify({ message: "An order with this number already exists" }), { status: 409 }));
@@ -87,7 +90,7 @@ describe("App", () => {
     expect(screen.queryByText("ORD-004")).not.toBeInTheDocument();
     expect(within(screen.getByRole("navigation", { name: "Orders pagination" })).getByText("Page 1 of 2")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "View all" }));
+    await user.click(within(screen.getByRole("region", { name: "Orders" })).getByRole("button", { name: "View all" }));
     expect(await screen.findByText("ORD-004")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show pages" })).toHaveAttribute("aria-expanded", "true");
   });
@@ -101,6 +104,22 @@ describe("App", () => {
     await user.click(within(screen.getByRole("navigation", { name: "Products pagination" })).getByRole("button", { name: "Next" }));
     expect(await screen.findByText("Product 4")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Products pagination" })).toHaveTextContent("Page 2 of 2");
+  });
+
+  it("shows all inventory products and restores pagination", async () => {
+    mockDashboardRequests();
+    const user = userEvent.setup();
+    render(<App />);
+    const inventory = await screen.findByRole("region", { name: "Stock watch" });
+    await within(inventory).findByText("Product 1");
+
+    await user.click(within(inventory).getByRole("button", { name: "View all" }));
+    expect(await within(inventory).findByText("Product 4")).toBeInTheDocument();
+    expect(within(inventory).getByRole("button", { name: "Show pages" })).toHaveAttribute("aria-expanded", "true");
+    expect(within(inventory).queryByRole("navigation", { name: "Products pagination" })).not.toBeInTheDocument();
+
+    await user.click(within(inventory).getByRole("button", { name: "Show pages" }));
+    expect(await within(inventory).findByRole("navigation", { name: "Products pagination" })).toHaveTextContent("Page 1 of 2");
   });
 
   it("applies order search and resets the status filter", async () => {
@@ -187,6 +206,29 @@ describe("App", () => {
       status: "processing",
       total: 84.5,
     });
+  });
+
+  it("clears workspace messages when a new session starts", async () => {
+    mockDashboardRequests(false, operatorUser, viewerUser);
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("ORD-001");
+
+    await user.click(screen.getByRole("button", { name: "New order" }));
+    const form = screen.getByRole("form", { name: "Create order" });
+    await user.type(within(form).getByLabelText("Order number"), "BT-1050");
+    await user.type(within(form).getByLabelText("Customer"), "Session test");
+    await user.type(within(form).getByLabelText("Total"), "10");
+    await user.click(within(form).getByRole("button", { name: "Create order" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Order BT-1050 created successfully.");
+
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    await user.type(screen.getByLabelText("Email"), viewerUser.email);
+    await user.type(screen.getByLabelText("Password"), "RetailView!2026");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await screen.findByRole("heading", { name: "Good morning, Reporting Viewer." })).toBeInTheDocument();
+    expect(screen.queryByText("Order BT-1050 created successfully.")).not.toBeInTheDocument();
   });
 
   it("shows duplicate order feedback in the reserved form footer", async () => {
