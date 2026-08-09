@@ -18,6 +18,26 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(160) UNIQUE NOT NULL,
+  display_name VARCHAR(120) NOT NULL,
+  password_salt CHAR(32) NOT NULL,
+  password_hash CHAR(128) NOT NULL,
+  role VARCHAR(24) NOT NULL
+    CONSTRAINT users_role_check CHECK (role IN ('operator', 'viewer')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash CHAR(64) PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions (expires_at);
+
 ALTER TABLE orders DROP COLUMN IF EXISTS sku;
 DO $$
 BEGIN
@@ -29,6 +49,27 @@ BEGIN
 END $$;
 
 ALTER TABLE orders VALIDATE CONSTRAINT orders_order_number_format_check;
+
+INSERT INTO users (email, display_name, password_salt, password_hash, role) VALUES
+  (
+    'operator@retail.local',
+    'Operations Manager',
+    '8c603cc1f1d98e2ecbda4462785a6dc3',
+    'c5cf7a87c25e2ca125c348379485d4785e9d5a9976f3df6fc0f185d771c0220f410e3cf76648612fbc9def6dbb76e0ef54b17467e9b40656e1f4193267e62c24',
+    'operator'
+  ),
+  (
+    'viewer@retail.local',
+    'Reporting Viewer',
+    '3612fa6edbc1630d30b5b00dd5d11801',
+    'b67e8ca1fc3ba7a28c7363caa2c35ca67cf9e60a8325e5db9512ec535f6a52d759ee6fd0eae91ebf1eb4bea583fb9442cdb41c64cc81492fcb9709f7b3f23224',
+    'viewer'
+  )
+ON CONFLICT (email) DO UPDATE SET
+  display_name = EXCLUDED.display_name,
+  password_salt = EXCLUDED.password_salt,
+  password_hash = EXCLUDED.password_hash,
+  role = EXCLUDED.role;
 
 INSERT INTO products (sku, name, category, price, stock, reorder_level) VALUES
   ('TEE-BLK-M', 'Classic Black Tee', 'Apparel', 24.00, 42, 12),

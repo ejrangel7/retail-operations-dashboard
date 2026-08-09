@@ -4,6 +4,10 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import type { AuthUser } from "./types";
+
+const operatorUser: AuthUser = { id: 1, email: "operator@retail.local", displayName: "Operations Manager", role: "operator" };
+const viewerUser: AuthUser = { id: 2, email: "viewer@retail.local", displayName: "Reporting Viewer", role: "viewer" };
 
 const orders = Array.from({ length: 4 }, (_, index) => ({
   id: index + 1,
@@ -28,10 +32,14 @@ function page<T>(items: T[], currentPage: number, pageSize: number, total: numbe
   return { items, pagination: { page: currentPage, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) } };
 }
 
-function mockDashboardRequests(duplicateOrder = false) {
+function mockDashboardRequests(duplicateOrder = false, authenticatedUser = operatorUser) {
   vi.stubGlobal("fetch", vi.fn((input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
     const method = init?.method ?? "GET";
+    if (url.pathname.endsWith("/auth/me")) {
+      return Promise.resolve(new Response(JSON.stringify(authenticatedUser)));
+    }
+    if (url.pathname.endsWith("/auth/logout")) return Promise.resolve(new Response(null, { status: 204 }));
     if (method === "POST" && url.pathname.endsWith("/orders")) {
       if (duplicateOrder) {
         return Promise.resolve(new Response(JSON.stringify({ message: "An order with this number already exists" }), { status: 409 }));
@@ -205,6 +213,17 @@ describe("App", () => {
     expect(within(form).getByRole("button", { name: "Create order" })).toBeInTheDocument();
   });
 
+  it("renders viewer access as read-only", async () => {
+    mockDashboardRequests(false, viewerUser);
+    render(<App />);
+    await screen.findByText("ORD-001");
+
+    expect(screen.getByRole("heading", { name: "Good morning, Reporting Viewer." })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New order" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Update status for ORD-001")).not.toBeInTheDocument();
+    expect(screen.getAllByText("processing").length).toBeGreaterThan(0);
+  });
+
   it("updates fulfillment status from the orders table", async () => {
     mockDashboardRequests();
     const user = userEvent.setup();
@@ -219,8 +238,12 @@ describe("App", () => {
     expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({ status: "shipped" });
   });
 
-  it("shows useful feedback when API requests fail", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 500 })));
+  it("shows useful feedback when operational API requests fail", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/auth/me")) return Promise.resolve(new Response(JSON.stringify(operatorUser)));
+      return Promise.resolve(new Response(null, { status: 500 }));
+    }));
     render(<App />);
     await waitFor(() => expect(screen.getAllByRole("alert")[0]).toBeInTheDocument());
   });

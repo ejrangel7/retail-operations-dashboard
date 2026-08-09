@@ -1,3 +1,12 @@
+export type UserRole = "operator" | "viewer";
+
+export type AuthUser = {
+  id: number;
+  email: string;
+  displayName: string;
+  role: UserRole;
+};
+
 export type DashboardSummary = {
   totalProducts: number;
   totalOrders: number;

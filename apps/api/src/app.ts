@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 import type { Pool } from "pg";
+import { authenticate, registerAuthRoutes, requireRole } from "./auth.js";
 
 const orderStatuses = new Set(["processing", "shipped", "delivered"]);
 const stockFilters = new Set(["low", "in-stock"]);
@@ -68,15 +69,21 @@ function isPostgresError(error: unknown, code: string) {
   return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
-export function createApp(pool: Pool) {
+export function createApp(pool: Pool, options: { authRequired?: boolean; secureCookies?: boolean } = {}) {
   const app = express();
-  app.use(cors());
+  app.use(cors({ origin: process.env.WEB_ORIGIN ?? "http://localhost:8080", credentials: true }));
   app.use(express.json());
 
   app.get("/api/health", async (_request, response) => {
     const result = await pool.query<{ now: string }>("SELECT NOW() AS now");
     response.json({ status: "ok", databaseTime: result.rows[0].now });
   });
+
+  registerAuthRoutes(app, pool, options.secureCookies ?? process.env.COOKIE_SECURE === "true");
+  if (options.authRequired !== false) app.use("/api", authenticate(pool));
+  const operatorOnly: express.RequestHandler = options.authRequired === false
+    ? (_request, _response, next) => next()
+    : requireRole("operator");
 
   app.get("/api/dashboard", async (_request, response) => {
     const [products, orders, revenue, lowStock] = await Promise.all([
@@ -149,7 +156,7 @@ export function createApp(pool: Pool) {
     response.json(paginated(dataResult.rows, parsed.page, parsed.pageSize, Number(countResult.rows[0].count)));
   });
 
-  app.post("/api/orders", async (request, response) => {
+  app.post("/api/orders", operatorOnly, async (request, response) => {
     const parsed = parseCreateOrder(request.body);
     if (typeof parsed === "string") { response.status(400).json({ message: parsed }); return; }
     try {
@@ -170,7 +177,7 @@ export function createApp(pool: Pool) {
     }
   });
 
-  app.patch("/api/orders/:id", async (request, response) => {
+  app.patch("/api/orders/:id", operatorOnly, async (request, response) => {
     const id = parsePositiveInteger(request.params.id, 0);
     const status = request.body && typeof request.body.status === "string" ? request.body.status : "";
     if (id === null || id === 0) { response.status(400).json({ message: "order id must be a positive integer" }); return; }

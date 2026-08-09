@@ -17,6 +17,29 @@
   --danger-soft: #fff1f0;
 }
 
+
+.auth-loading, .login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at top left, #e6f2e9, #f4f7f3 52%); }
+.auth-loading { color: var(--muted); font-weight: 600; }
+.login-card { width: min(100%, 460px); padding: 34px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: 0 20px 60px rgba(23, 33, 27, .1); }
+.login-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 32px; font: 700 18px "Manrope", sans-serif; }
+.login-card h1 { margin-bottom: 10px; }
+.login-intro { margin-bottom: 22px; color: var(--muted); }
+.login-error { margin-bottom: 16px; padding: 11px 13px; border-radius: 9px; background: var(--danger-soft); color: var(--danger); font-size: 13px; }
+.login-form { display: grid; gap: 15px; }
+.login-form label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.login-form input { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; color: var(--ink); font: inherit; }
+.login-form input:focus { outline: 0; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+.login-submit { margin-top: 3px; }
+.demo-accounts { display: grid; gap: 8px; margin-top: 24px; padding: 14px; border-radius: 11px; background: #f7faf7; }
+.demo-accounts p { display: grid; gap: 2px; margin: 0; font-size: 11px; }
+.demo-accounts span { color: var(--muted); overflow-wrap: anywhere; }
+.login-disclaimer { margin: 15px 0 0; color: var(--muted); font-size: 10px; text-align: center; }
+.topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+.current-user { display: grid; gap: 2px; text-align: right; }
+.current-user span { font-size: 12px; font-weight: 700; }
+.current-user small { color: var(--muted); font-size: 10px; text-transform: capitalize; }
+.logout-button { white-space: nowrap; }
+
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
@@ -102,6 +125,7 @@ td.strong { color: var(--ink); font-weight: 700; }
   .nav-link { white-space: nowrap; padding: 8px 10px; }
   main { padding: 28px 18px 48px; }
   .topbar { align-items: flex-end; }
+  .topbar-actions { flex-wrap: wrap; }
   .topbar p:not(.eyebrow) { display: none; }
   .metric-grid { grid-template-columns: 1fr 1fr; }
 }
