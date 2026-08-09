@@ -21,6 +21,8 @@ services:
     environment:
       DATABASE_URL: postgresql://retail:retail@database:5432/retail_ops
       PORT: 4000
+      WEB_ORIGIN: http://localhost:8080
+      COOKIE_SECURE: "false"
     ports:
       - "4000:4000"
     depends_on:

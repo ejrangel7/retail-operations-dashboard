@@ -4,6 +4,10 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import type { AuthUser } from "./types";
+
+const operatorUser: AuthUser = { id: 1, email: "operator@retail.local", displayName: "Operations Manager", role: "operator" };
+const viewerUser: AuthUser = { id: 2, email: "viewer@retail.local", displayName: "Reporting Viewer", role: "viewer" };
 
 const orders = Array.from({ length: 4 }, (_, index) => ({
   id: index + 1,
@@ -28,10 +32,17 @@ function page<T>(items: T[], currentPage: number, pageSize: number, total: numbe
   return { items, pagination: { page: currentPage, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) } };
 }
 
-function mockDashboardRequests(duplicateOrder = false) {
+function mockDashboardRequests(duplicateOrder = false, authenticatedUser = operatorUser, loginUser = authenticatedUser) {
   vi.stubGlobal("fetch", vi.fn((input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
     const method = init?.method ?? "GET";
+    if (url.pathname.endsWith("/auth/me")) {
+      return Promise.resolve(new Response(JSON.stringify(authenticatedUser)));
+    }
+    if (url.pathname.endsWith("/auth/logout")) return Promise.resolve(new Response(null, { status: 204 }));
+    if (method === "POST" && url.pathname.endsWith("/auth/login")) {
+      return Promise.resolve(new Response(JSON.stringify(loginUser)));
+    }
     if (method === "POST" && url.pathname.endsWith("/orders")) {
       if (duplicateOrder) {
         return Promise.resolve(new Response(JSON.stringify({ message: "An order with this number already exists" }), { status: 409 }));
@@ -79,7 +90,7 @@ describe("App", () => {
     expect(screen.queryByText("ORD-004")).not.toBeInTheDocument();
     expect(within(screen.getByRole("navigation", { name: "Orders pagination" })).getByText("Page 1 of 2")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "View all" }));
+    await user.click(within(screen.getByRole("region", { name: "Orders" })).getByRole("button", { name: "View all" }));
     expect(await screen.findByText("ORD-004")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show pages" })).toHaveAttribute("aria-expanded", "true");
   });
@@ -93,6 +104,22 @@ describe("App", () => {
     await user.click(within(screen.getByRole("navigation", { name: "Products pagination" })).getByRole("button", { name: "Next" }));
     expect(await screen.findByText("Product 4")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Products pagination" })).toHaveTextContent("Page 2 of 2");
+  });
+
+  it("shows all inventory products and restores pagination", async () => {
+    mockDashboardRequests();
+    const user = userEvent.setup();
+    render(<App />);
+    const inventory = await screen.findByRole("region", { name: "Stock watch" });
+    await within(inventory).findByText("Product 1");
+
+    await user.click(within(inventory).getByRole("button", { name: "View all" }));
+    expect(await within(inventory).findByText("Product 4")).toBeInTheDocument();
+    expect(within(inventory).getByRole("button", { name: "Show pages" })).toHaveAttribute("aria-expanded", "true");
+    expect(within(inventory).queryByRole("navigation", { name: "Products pagination" })).not.toBeInTheDocument();
+
+    await user.click(within(inventory).getByRole("button", { name: "Show pages" }));
+    expect(await within(inventory).findByRole("navigation", { name: "Products pagination" })).toHaveTextContent("Page 1 of 2");
   });
 
   it("applies order search and resets the status filter", async () => {
@@ -181,6 +208,29 @@ describe("App", () => {
     });
   });
 
+  it("clears workspace messages when a new session starts", async () => {
+    mockDashboardRequests(false, operatorUser, viewerUser);
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("ORD-001");
+
+    await user.click(screen.getByRole("button", { name: "New order" }));
+    const form = screen.getByRole("form", { name: "Create order" });
+    await user.type(within(form).getByLabelText("Order number"), "BT-1050");
+    await user.type(within(form).getByLabelText("Customer"), "Session test");
+    await user.type(within(form).getByLabelText("Total"), "10");
+    await user.click(within(form).getByRole("button", { name: "Create order" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Order BT-1050 created successfully.");
+
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    await user.type(screen.getByLabelText("Email"), viewerUser.email);
+    await user.type(screen.getByLabelText("Password"), "RetailView!2026");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await screen.findByRole("heading", { name: "Good morning, Reporting Viewer." })).toBeInTheDocument();
+    expect(screen.queryByText("Order BT-1050 created successfully.")).not.toBeInTheDocument();
+  });
+
   it("shows duplicate order feedback in the reserved form footer", async () => {
     mockDashboardRequests(true);
     const user = userEvent.setup();
@@ -205,6 +255,17 @@ describe("App", () => {
     expect(within(form).getByRole("button", { name: "Create order" })).toBeInTheDocument();
   });
 
+  it("renders viewer access as read-only", async () => {
+    mockDashboardRequests(false, viewerUser);
+    render(<App />);
+    await screen.findByText("ORD-001");
+
+    expect(screen.getByRole("heading", { name: "Good morning, Reporting Viewer." })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New order" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Update status for ORD-001")).not.toBeInTheDocument();
+    expect(screen.getAllByText("processing").length).toBeGreaterThan(0);
+  });
+
   it("updates fulfillment status from the orders table", async () => {
     mockDashboardRequests();
     const user = userEvent.setup();
@@ -219,8 +280,12 @@ describe("App", () => {
     expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({ status: "shipped" });
   });
 
-  it("shows useful feedback when API requests fail", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 500 })));
+  it("shows useful feedback when operational API requests fail", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/auth/me")) return Promise.resolve(new Response(JSON.stringify(operatorUser)));
+      return Promise.resolve(new Response(null, { status: 500 }));
+    }));
     render(<App />);
     await waitFor(() => expect(screen.getAllByRole("alert")[0]).toBeInTheDocument());
   });

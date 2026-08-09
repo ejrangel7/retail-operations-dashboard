@@ -17,6 +17,7 @@ This project is designed to demonstrate more than isolated framework knowledge. 
 - Responsive React interface
 - Reproducible local environment with Docker Compose
 - Seeded, fictional retail data
+- PostgreSQL-backed login sessions and role-based order permissions
 
 ## Tech stack
 
@@ -58,6 +59,15 @@ Then open:
 - Dashboard: `http://localhost:8080`
 - API health check: `http://localhost:4000/api/health`
 
+### Demo accounts
+
+| Role | Email | Password | Access |
+| --- | --- | --- | --- |
+| Operator | `operator@retail.local` | `RetailOps!2026` | Read, export, create orders, update fulfillment |
+| Viewer | `viewer@retail.local` | `RetailView!2026` | Read and export only |
+
+These credentials are fictional and are intended exclusively for the local portfolio environment.
+
 Stop the environment with:
 
 ```bash
@@ -95,12 +105,26 @@ retail-operations-dashboard/
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| GET | `/api/health` | API and database health |
-| GET | `/api/dashboard` | Summary metrics |
+| GET | `/api/health` | Public API and database health |
+| POST | `/api/auth/login` | Create an HTTP-only database session |
+| GET | `/api/auth/me` | Return the authenticated user |
+| POST | `/api/auth/logout` | Revoke the current session |
+| GET | `/api/dashboard` | Authenticated summary metrics |
 | GET | `/api/products` | Filtered and paginated inventory data |
 | GET | `/api/orders` | Filtered and paginated orders |
 | POST | `/api/orders` | Create a validated order |
 | PATCH | `/api/orders/:id` | Update fulfillment status |
+
+Dashboard, product, order, and current-user endpoints require an active session. Logout remains idempotent when no session exists. Order creation and fulfillment updates additionally require the `operator` role.
+
+### Authentication design
+
+- Passwords are stored as salted `scrypt` hashes; plaintext passwords are never stored.
+- Session tokens are random, returned only in an `HttpOnly` and `SameSite=Lax` cookie, and stored in PostgreSQL only as SHA-256 hashes.
+- Sessions expire after eight hours and are revoked server-side on logout.
+- CORS allows credentials only for the configured frontend origin.
+- Local Docker uses HTTP and therefore sets `COOKIE_SECURE=false`; an HTTPS deployment must set `COOKIE_SECURE=true`.
+- This portfolio implementation does not include account recovery, MFA, rate limiting, or an external identity provider.
 
 ### Order number convention
 
@@ -121,7 +145,7 @@ Order numbers must use the exact format `BT-0000`: the uppercase prefix `BT-` fo
 - [x] Docker Compose environment
 - [x] Server-side filtering and pagination
 - [x] Create and update order workflows
-- [ ] Authentication and role-based access
+- [x] Authentication and role-based access
 - [x] Unit and integration tests
 - [x] GitHub Actions continuous integration
 - [ ] Accessible charts and reporting
