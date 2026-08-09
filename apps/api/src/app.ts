@@ -100,6 +100,26 @@ export function createApp(pool: Pool, options: { authRequired?: boolean; secureC
     });
   });
 
+  app.get("/api/reports/operations", async (_request, response) => {
+    const [orderStatus, inventoryByCategory] = await Promise.all([
+      pool.query(
+        `WITH statuses (status, position) AS (
+           VALUES ('processing', 1), ('shipped', 2), ('delivered', 3)
+         )
+         SELECT statuses.status, COUNT(orders.id)::int AS "orderCount",
+                COALESCE(SUM(orders.total), 0)::float AS revenue
+         FROM statuses LEFT JOIN orders ON orders.status = statuses.status
+         GROUP BY statuses.status, statuses.position ORDER BY statuses.position`,
+      ),
+      pool.query(
+        `SELECT category, COUNT(*)::int AS "productCount", SUM(stock)::int AS "stockUnits",
+                COUNT(*) FILTER (WHERE stock <= reorder_level)::int AS "lowStockItems"
+         FROM products GROUP BY category ORDER BY category ASC`,
+      ),
+    ]);
+    response.json({ orderStatus: orderStatus.rows, inventoryByCategory: inventoryByCategory.rows });
+  });
+
   app.get("/api/products", async (request, response) => {
     const parsed = parseCollectionQuery(request.query);
     if (typeof parsed === "string") { response.status(400).json({ message: parsed }); return; }

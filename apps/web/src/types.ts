@@ -14,6 +14,20 @@ export type DashboardSummary = {
   lowStockItems: number;
 };
 
+export type OperationsInsights = {
+  orderStatus: Array<{
+    status: OrderStatus;
+    orderCount: number;
+    revenue: number;
+  }>;
+  inventoryByCategory: Array<{
+    category: string;
+    productCount: number;
+    stockUnits: number;
+    lowStockItems: number;
+  }>;
+};
+
 export type Product = {
   id: number;
   sku: string;

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { LoginScreen } from "./LoginScreen";
 import { NewOrderForm } from "./NewOrderForm";
+import { OperationsInsightsPanel } from "./OperationsInsights";
 import { createCsvReport, reportFilename } from "./report";
-import type { AuthUser, CreateOrderInput, DashboardSummary, Order, OrderStatus, PaginatedResponse, Pagination, Product } from "./types";
+import type { AuthUser, CreateOrderInput, DashboardSummary, OperationsInsights, Order, OrderStatus, PaginatedResponse, Pagination, Product } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 const PAGE_SIZE = 3;
@@ -72,6 +73,7 @@ function App() {
   const [loginError, setLoginError] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [insights, setInsights] = useState<OperationsInsights | null | undefined>(undefined);
   const [orders, setOrders] = useState<Order[]>([]);
   const [orderPagination, setOrderPagination] = useState(emptyPagination());
   const [products, setProducts] = useState<Product[]>([]);
@@ -106,6 +108,16 @@ function App() {
     fetchJson<DashboardSummary>("/dashboard")
       .then(setSummary)
       .catch(() => setError("The dashboard data could not be loaded."));
+  }, [currentUser, dataVersion]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    fetchJson<OperationsInsights>("/reports/operations")
+      .then(setInsights)
+      .catch(() => {
+        setInsights(null);
+        setError("Reporting data could not be loaded.");
+      });
   }, [currentUser, dataVersion]);
 
   useEffect(() => {
@@ -174,6 +186,7 @@ function App() {
     } finally {
       setCurrentUser(null);
       setSummary(null);
+      setInsights(undefined);
       setOrders([]);
       setProducts([]);
       clearWorkspaceFeedback();
@@ -266,6 +279,7 @@ function App() {
         </a>
         <nav aria-label="Primary navigation">
           <a className="nav-link active" href="#overview">Overview</a>
+          <a className="nav-link" href="#reports">Reports</a>
           <a className="nav-link" href="#orders">Orders</a>
           <a className="nav-link" href="#inventory">Inventory</a>
         </nav>
@@ -305,6 +319,8 @@ function App() {
             <MetricCard label="Low stock" value={summary?.lowStockItems ?? "—"} trend="Needs attention" alert />
           </div>
         </section>
+
+        <OperationsInsightsPanel data={insights} />
 
         <div className="content-grid">
           <section id="orders" className="panel" aria-labelledby="orders-title">

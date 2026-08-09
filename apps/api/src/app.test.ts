@@ -30,6 +30,26 @@ describe("Retail Operations API", () => {
     expect(response.body).toEqual({ totalProducts: 8, totalOrders: 5, revenue: 1549.95, lowStockItems: 2 });
   });
 
+  it("returns accessible operations reporting aggregates", async () => {
+    const orderStatus = [
+      { status: "processing", orderCount: 2, revenue: 77 },
+      { status: "shipped", orderCount: 1, revenue: 42 },
+      { status: "delivered", orderCount: 2, revenue: 145 },
+    ];
+    const inventoryByCategory = [
+      { category: "Accessories", productCount: 2, stockUnits: 43, lowStockItems: 0 },
+      { category: "Apparel", productCount: 2, stockUnits: 50, lowStockItems: 1 },
+    ];
+    const pool = poolWithRows(orderStatus, inventoryByCategory);
+
+    const response = await request(createTestApp(pool)).get("/api/reports/operations");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ orderStatus, inventoryByCategory });
+    expect(vi.mocked(pool.query).mock.calls[0][0]).toContain("WITH statuses");
+    expect(vi.mocked(pool.query).mock.calls[1][0]).toContain("GROUP BY category");
+  });
+
   it("filters and paginates orders with parameterized queries", async () => {
     const order = {
       id: 3,
