@@ -28,6 +28,8 @@ BEGIN
   END IF;
 END $$;
 
+ALTER TABLE orders VALIDATE CONSTRAINT orders_order_number_format_check;
+
 INSERT INTO products (sku, name, category, price, stock, reorder_level) VALUES
   ('TEE-BLK-M', 'Classic Black Tee', 'Apparel', 24.00, 42, 12),
   ('TEE-LAV-L', 'Lavender Graphic Tee', 'Apparel', 29.00, 8, 10),
