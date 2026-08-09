@@ -18,10 +18,11 @@ export function createCsvReport(
     [summary.revenue.toFixed(2), summary.totalOrders, summary.totalProducts, summary.lowStockItems],
     [],
     ["Orders"],
-    ["Order", "Customer", "Status", "Total", "Created at"],
+    ["Order", "Customer", "SKU", "Status", "Total", "Created at"],
     ...orders.map((order) => [
       order.orderNumber,
       order.customerName,
+      order.sku,
       order.status,
       order.total.toFixed(2),
       new Date(order.createdAt).toISOString(),

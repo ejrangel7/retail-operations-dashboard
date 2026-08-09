@@ -9,6 +9,7 @@ type ParsedQuery = { page: number; pageSize: number; search: string };
 type CreateOrderInput = {
   orderNumber: string;
   customerName: string;
+  sku: string;
   status: string;
   total: number;
 };
@@ -41,6 +42,7 @@ function parseCreateOrder(body: unknown): CreateOrderInput | string {
   const candidate = body as Record<string, unknown>;
   const orderNumber = typeof candidate.orderNumber === "string" ? candidate.orderNumber.trim() : "";
   const customerName = typeof candidate.customerName === "string" ? candidate.customerName.trim() : "";
+  const sku = typeof candidate.sku === "string" ? candidate.sku.trim().toUpperCase() : "";
   const status = typeof candidate.status === "string" ? candidate.status : "";
   const total = candidate.total;
 
@@ -50,11 +52,14 @@ function parseCreateOrder(body: unknown): CreateOrderInput | string {
   if (customerName.length < 2 || customerName.length > 120) {
     return "customerName must be between 2 and 120 characters";
   }
+  if (sku.length < 3 || sku.length > 32 || !/^[A-Z0-9]+(?:-[A-Z0-9]+)+$/.test(sku)) {
+    return "sku must contain 3 to 32 uppercase letters, numbers, and hyphen-separated segments";
+  }
   if (!orderStatuses.has(status)) return "status is not supported";
   if (typeof total !== "number" || !Number.isFinite(total) || total <= 0 || total > 99_999_999.99) {
     return "total must be a positive number";
   }
-  return { orderNumber, customerName, status, total };
+  return { orderNumber, customerName, sku, status, total };
 }
 
 function paginated<T>(items: T[], page: number, pageSize: number, total: number) {
@@ -131,7 +136,7 @@ export function createApp(pool: Pool) {
     const values: Array<string | number> = [];
     if (parsed.search) {
       values.push(`%${parsed.search}%`);
-      conditions.push(`(order_number ILIKE $${values.length} OR customer_name ILIKE $${values.length})`);
+      conditions.push(`(order_number ILIKE $${values.length} OR customer_name ILIKE $${values.length} OR sku ILIKE $${values.length})`);
     }
     if (status) { values.push(status); conditions.push(`status = $${values.length}`); }
     const where = conditions.length ? ` WHERE ${conditions.join(" AND ")}` : "";
@@ -140,7 +145,7 @@ export function createApp(pool: Pool) {
       pool.query<{ count: string }>(`SELECT COUNT(*) AS count FROM orders${where}`, values),
       pool.query(
         `SELECT id, order_number AS "orderNumber", customer_name AS "customerName",
-                status, total::float, created_at AS "createdAt"
+                sku, status, total::float, created_at AS "createdAt"
          FROM orders${where} ORDER BY created_at DESC
          LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
         dataValues,
@@ -154,16 +159,20 @@ export function createApp(pool: Pool) {
     if (typeof parsed === "string") { response.status(400).json({ message: parsed }); return; }
     try {
       const result = await pool.query(
-        `INSERT INTO orders (order_number, customer_name, status, total)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO orders (order_number, customer_name, sku, status, total)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING id, order_number AS "orderNumber", customer_name AS "customerName",
-                   status, total::float, created_at AS "createdAt"`,
-        [parsed.orderNumber, parsed.customerName, parsed.status, parsed.total],
+                   sku, status, total::float, created_at AS "createdAt"`,
+        [parsed.orderNumber, parsed.customerName, parsed.sku, parsed.status, parsed.total],
       );
       response.status(201).json(result.rows[0]);
     } catch (error) {
       if (isPostgresError(error, "23505")) {
         response.status(409).json({ message: "An order with this number already exists" });
+        return;
+      }
+      if (isPostgresError(error, "23503")) {
+        response.status(400).json({ message: "SKU does not exist in inventory" });
         return;
       }
       throw error;
@@ -179,7 +188,7 @@ export function createApp(pool: Pool) {
     const result = await pool.query(
       `UPDATE orders SET status = $1 WHERE id = $2
        RETURNING id, order_number AS "orderNumber", customer_name AS "customerName",
-                 status, total::float, created_at AS "createdAt"`,
+                 sku, status, total::float, created_at AS "createdAt"`,
       [status, id],
     );
     if (result.rows.length === 0) { response.status(404).json({ message: "Order not found" }); return; }

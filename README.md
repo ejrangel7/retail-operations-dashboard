@@ -102,6 +102,12 @@ retail-operations-dashboard/
 | POST | `/api/orders` | Create a validated order |
 | PATCH | `/api/orders/:id` | Update fulfillment status |
 
+### SKU convention
+
+SKUs contain 3 to 32 uppercase letters and numbers arranged in at least two hyphen-separated segments. Spaces, consecutive hyphens, and leading or trailing hyphens are rejected. Examples: `TEE-BLK-M`, `MUG-CAT`, and `SKU-001`.
+
+Order creation normalizes SKU input to uppercase and verifies that the SKU exists in the product catalog before storing the order.
+
 ### Collection query parameters
 
 - Both collection endpoints accept `page`, `pageSize` (maximum 100), and `search`.

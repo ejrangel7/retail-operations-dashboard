@@ -33,6 +33,7 @@ describe("Retail Operations API", () => {
       id: 3,
       orderNumber: "BT-1046",
       customerName: "Sample Customer C",
+      sku: "TOTE-NAT",
       status: "shipped",
       total: 69,
       createdAt: "2026-08-06T12:00:00.000Z",
@@ -77,6 +78,7 @@ describe("Retail Operations API", () => {
       id: 6,
       orderNumber: "BT-1049",
       customerName: "Sample Customer F",
+      sku: "TEE-BLK-M",
       status: "processing",
       total: 84.5,
       createdAt: "2026-08-08T12:00:00.000Z",
@@ -86,6 +88,7 @@ describe("Retail Operations API", () => {
     const response = await request(createApp(pool)).post("/api/orders").send({
       orderNumber: "BT-1049",
       customerName: "Sample Customer F",
+      sku: "tee-blk-m",
       status: "processing",
       total: 84.5,
     });
@@ -93,7 +96,7 @@ describe("Retail Operations API", () => {
     expect(response.status).toBe(201);
     expect(response.body).toEqual(created);
     expect(vi.mocked(pool.query).mock.calls[0][1]).toEqual([
-      "BT-1049", "Sample Customer F", "processing", 84.5,
+      "BT-1049", "Sample Customer F", "TEE-BLK-M", "processing", 84.5,
     ]);
   });
 
@@ -114,6 +117,7 @@ describe("Retail Operations API", () => {
     const duplicate = await request(createApp(duplicatePool)).post("/api/orders").send({
       orderNumber: "BT-1049",
       customerName: "Sample Customer F",
+      sku: "TEE-BLK-M",
       status: "processing",
       total: 84.5,
     });
@@ -121,11 +125,32 @@ describe("Retail Operations API", () => {
     expect(duplicate.body).toEqual({ message: "An order with this number already exists" });
   });
 
+  it("rejects malformed and unknown SKUs", async () => {
+    const malformedPool = poolWithRows();
+    const malformed = await request(createApp(malformedPool)).post("/api/orders").send({
+      orderNumber: "BT-1050", customerName: "Sample Customer G", sku: "bad sku",
+      status: "processing", total: 25,
+    });
+    expect(malformed.status).toBe(400);
+    expect(malformedPool.query).not.toHaveBeenCalled();
+
+    const unknownPool = {
+      query: vi.fn().mockRejectedValue(Object.assign(new Error("foreign key"), { code: "23503" })),
+    } as unknown as Pool;
+    const unknown = await request(createApp(unknownPool)).post("/api/orders").send({
+      orderNumber: "BT-1050", customerName: "Sample Customer G", sku: "SKU-999",
+      status: "processing", total: 25,
+    });
+    expect(unknown.status).toBe(400);
+    expect(unknown.body).toEqual({ message: "SKU does not exist in inventory" });
+  });
+
   it("updates an order fulfillment status", async () => {
     const updated = {
       id: 3,
       orderNumber: "BT-1046",
       customerName: "Sample Customer C",
+      sku: "TOTE-NAT",
       status: "shipped",
       total: 69,
       createdAt: "2026-08-06T12:00:00.000Z",

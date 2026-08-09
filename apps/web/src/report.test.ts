@@ -13,6 +13,7 @@ const orders: Order[] = [{
   id: 1,
   orderNumber: "ORD-001",
   customerName: 'Doe, "Jane"',
+  sku: "SKU-001",
   status: "processing",
   total: 49.5,
   createdAt: "2026-08-07T12:00:00.000Z",
@@ -38,6 +39,7 @@ describe("CSV report", () => {
     );
     expect(report).toContain('"Generated at","2026-08-07T15:30:00.000Z"');
     expect(report).toContain('"Doe, ""Jane"""');
+    expect(report).toContain('"Order","Customer","SKU","Status","Total","Created at"');
     expect(report).toContain('"SKU-001","Travel Mug","Accessories","49.50","2","3","Reorder"');
   });
 
