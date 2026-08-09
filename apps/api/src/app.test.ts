@@ -72,6 +72,94 @@ describe("Retail Operations API", () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
+  it("creates a validated order", async () => {
+    const created = {
+      id: 6,
+      orderNumber: "BT-1049",
+      customerName: "Sample Customer F",
+      status: "processing",
+      total: 84.5,
+      createdAt: "2026-08-08T12:00:00.000Z",
+    };
+    const pool = poolWithRows([created]);
+
+    const response = await request(createApp(pool)).post("/api/orders").send({
+      orderNumber: "BT-1049",
+      customerName: "Sample Customer F",
+      status: "processing",
+      total: 84.5,
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual(created);
+    expect(vi.mocked(pool.query).mock.calls[0][1]).toEqual([
+      "BT-1049", "Sample Customer F", "processing", 84.5,
+    ]);
+  });
+
+  it("requires order numbers in BT-0000 format", async () => {
+    const pool = poolWithRows();
+    const response = await request(createApp(pool)).post("/api/orders").send({
+      orderNumber: "ORD-1049", customerName: "Sample Customer F",
+      status: "processing", total: 84.5,
+    });
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: "orderNumber must use the format BT-0000" });
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid and duplicate orders", async () => {
+    const invalidPool = poolWithRows();
+    const invalid = await request(createApp(invalidPool)).post("/api/orders").send({
+      orderNumber: "!",
+      customerName: "",
+      status: "unknown",
+      total: -1,
+    });
+    expect(invalid.status).toBe(400);
+    expect(invalidPool.query).not.toHaveBeenCalled();
+
+    const duplicatePool = {
+      query: vi.fn().mockRejectedValue(Object.assign(new Error("duplicate"), { code: "23505" })),
+    } as unknown as Pool;
+    const duplicate = await request(createApp(duplicatePool)).post("/api/orders").send({
+      orderNumber: "BT-1049",
+      customerName: "Sample Customer F",
+      status: "processing",
+      total: 84.5,
+    });
+    expect(duplicate.status).toBe(409);
+    expect(duplicate.body).toEqual({ message: "An order with this number already exists" });
+  });
+
+  it("updates an order fulfillment status", async () => {
+    const updated = {
+      id: 3,
+      orderNumber: "BT-1046",
+      customerName: "Sample Customer C",
+      status: "shipped",
+      total: 69,
+      createdAt: "2026-08-06T12:00:00.000Z",
+    };
+    const pool = poolWithRows([updated]);
+    const response = await request(createApp(pool)).patch("/api/orders/3").send({ status: "shipped" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(updated);
+    expect(vi.mocked(pool.query).mock.calls[0][1]).toEqual(["shipped", 3]);
+  });
+
+  it("returns validation and not-found responses for order updates", async () => {
+    const invalidPool = poolWithRows();
+    const invalid = await request(createApp(invalidPool)).patch("/api/orders/not-a-number").send({ status: "unknown" });
+    expect(invalid.status).toBe(400);
+    expect(invalidPool.query).not.toHaveBeenCalled();
+
+    const missingPool = poolWithRows([]);
+    const missing = await request(createApp(missingPool)).patch("/api/orders/999").send({ status: "delivered" });
+    expect(missing.status).toBe(404);
+  });
+
   it("returns a safe error response when the database fails", async () => {
     const pool = { query: vi.fn().mockRejectedValue(new Error("database unavailable")) } as unknown as Pool;
     vi.spyOn(console, "error").mockImplementation(() => undefined);

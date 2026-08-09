@@ -28,9 +28,25 @@ function page<T>(items: T[], currentPage: number, pageSize: number, total: numbe
   return { items, pagination: { page: currentPage, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) } };
 }
 
-function mockDashboardRequests() {
-  vi.stubGlobal("fetch", vi.fn((input: string | URL | Request) => {
+function mockDashboardRequests(duplicateOrder = false) {
+  vi.stubGlobal("fetch", vi.fn((input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
+    const method = init?.method ?? "GET";
+    if (method === "POST" && url.pathname.endsWith("/orders")) {
+      if (duplicateOrder) {
+        return Promise.resolve(new Response(JSON.stringify({ message: "An order with this number already exists" }), { status: 409 }));
+      }
+      const body = JSON.parse(String(init?.body));
+      return Promise.resolve(new Response(JSON.stringify({
+        id: 5,
+        ...body,
+        createdAt: "2026-08-08T12:00:00.000Z",
+      }), { status: 201 }));
+    }
+    if (method === "PATCH" && url.pathname.includes("/orders/")) {
+      const body = JSON.parse(String(init?.body));
+      return Promise.resolve(new Response(JSON.stringify({ ...orders[0], ...body })));
+    }
     if (url.pathname.endsWith("/dashboard")) {
       return Promise.resolve(new Response(JSON.stringify({ totalProducts: 4, totalOrders: 4, revenue: 106, lowStockItems: 3 })));
     }
@@ -130,6 +146,77 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Reset inventory filters" }));
     expect(productSearch).toHaveValue("");
     expect(screen.queryByRole("button", { name: "Reset inventory filters" })).not.toBeInTheDocument();
+  });
+
+  it("creates an order from the dashboard form", async () => {
+    mockDashboardRequests();
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("ORD-001");
+
+    await user.click(screen.getByRole("button", { name: "New order" }));
+    const form = screen.getByRole("form", { name: "Create order" });
+    const orderNumber = within(form).getByLabelText("Order number");
+    await user.type(orderNumber, "1049");
+    expect(orderNumber).toHaveAttribute("aria-invalid", "true");
+    expect(orderNumber).toHaveClass("input-danger");
+    expect(within(form).getByRole("alert")).toHaveTextContent("Order number must use the format BT-0000.");
+    await user.clear(orderNumber);
+    await user.type(orderNumber, "bt-1049");
+    expect(orderNumber).toHaveValue("BT-1049");
+    expect(orderNumber).toHaveAttribute("aria-invalid", "false");
+    expect(within(form).queryByRole("alert")).not.toBeInTheDocument();
+    await user.type(within(form).getByLabelText("Customer"), "Sample Customer F");
+    await user.type(within(form).getByLabelText("Total"), "84.50");
+    await user.click(within(form).getByRole("button", { name: "Create order" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Order BT-1049 created successfully.");
+    const postCall = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === "POST");
+    expect(postCall).toBeDefined();
+    expect(JSON.parse(String(postCall?.[1]?.body))).toEqual({
+      orderNumber: "BT-1049",
+      customerName: "Sample Customer F",
+      status: "processing",
+      total: 84.5,
+    });
+  });
+
+  it("shows duplicate order feedback in the reserved form footer", async () => {
+    mockDashboardRequests(true);
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("ORD-001");
+
+    await user.click(screen.getByRole("button", { name: "New order" }));
+    const form = screen.getByRole("form", { name: "Create order" });
+    const errorSlot = form.querySelector(".order-form-submit-error");
+    expect(errorSlot).toBeInTheDocument();
+    expect(errorSlot).not.toHaveAttribute("role", "alert");
+
+    await user.type(within(form).getByLabelText("Order number"), "BT-1048");
+    await user.type(within(form).getByLabelText("Customer"), "Sample Customer");
+    await user.type(within(form).getByLabelText("Total"), "7.00");
+    await user.click(within(form).getByRole("button", { name: "Create order" }));
+
+    expect(await within(form).findByRole("alert")).toHaveTextContent("An order with this number already exists");
+    expect(form.querySelector(".order-form-submit-error")).toBe(errorSlot);
+    expect(document.querySelector(".error-banner")).not.toBeInTheDocument();
+    expect(within(form).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(within(form).getByRole("button", { name: "Create order" })).toBeInTheDocument();
+  });
+
+  it("updates fulfillment status from the orders table", async () => {
+    mockDashboardRequests();
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("ORD-001");
+
+    await user.selectOptions(screen.getByLabelText("Update status for ORD-001"), "shipped");
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Order ORD-001 updated to shipped.");
+    const patchCall = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === "PATCH");
+    expect(patchCall?.[0].toString()).toContain("/orders/1");
+    expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({ status: "shipped" });
   });
 
   it("shows useful feedback when API requests fail", async () => {

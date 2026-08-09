@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { NewOrderForm } from "./NewOrderForm";
 import { createCsvReport, reportFilename } from "./report";
-import type { DashboardSummary, Order, PaginatedResponse, Pagination, Product } from "./types";
+import type { CreateOrderInput, DashboardSummary, Order, OrderStatus, PaginatedResponse, Pagination, Product } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 const PAGE_SIZE = 3;
@@ -23,6 +24,19 @@ const emptyPagination = (pageSize = PAGE_SIZE): Pagination => ({
 async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { signal });
   if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+  return response.json() as Promise<T>;
+}
+
+async function sendJson<T>(path: string, method: "POST" | "PATCH", body: unknown): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { message?: string } | null;
+    throw new Error(payload?.message ?? `Request failed with status ${response.status}`);
+  }
   return response.json() as Promise<T>;
 }
 
@@ -68,12 +82,18 @@ function App() {
   const [stockFilter, setStockFilter] = useState("all");
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [showOrderForm, setShowOrderForm] = useState(false);
+  const [creatingOrder, setCreatingOrder] = useState(false);
+  const [savingOrderId, setSavingOrderId] = useState<number | null>(null);
+  const [orderActionMessage, setOrderActionMessage] = useState("");
+  const [orderFormError, setOrderFormError] = useState("");
+  const [dataVersion, setDataVersion] = useState(0);
 
   useEffect(() => {
     fetchJson<DashboardSummary>("/dashboard")
       .then(setSummary)
       .catch(() => setError("The dashboard data could not be loaded."));
-  }, []);
+  }, [dataVersion]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -92,7 +112,7 @@ function App() {
         }
       });
     return () => controller.abort();
-  }, [orderPage, orderSearch, orderStatus, showAllOrders]);
+  }, [dataVersion, orderPage, orderSearch, orderStatus, showAllOrders]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -111,6 +131,46 @@ function App() {
       });
     return () => controller.abort();
   }, [productPage, productSearch, stockFilter]);
+
+  async function createOrder(input: CreateOrderInput) {
+    setCreatingOrder(true);
+    setError("");
+    setOrderActionMessage("");
+    setOrderFormError("");
+    try {
+      const created = await sendJson<Order>("/orders", "POST", input);
+      setOrderActionMessage(`Order ${created.orderNumber} created successfully.`);
+      setShowOrderForm(false);
+      setOrderSearchInput("");
+      setOrderSearch("");
+      setOrderStatus("all");
+      setOrderPage(1);
+      setShowAllOrders(false);
+      setDataVersion((current) => current + 1);
+    } catch (requestError) {
+      setOrderFormError(requestError instanceof Error ? requestError.message : "The order could not be created.");
+    } finally {
+      setCreatingOrder(false);
+    }
+  }
+
+  async function updateOrderStatus(order: Order, status: OrderStatus) {
+    if (status === order.status) return;
+    setSavingOrderId(order.id);
+    setError("");
+    setOrderActionMessage("");
+    setOrders((current) => current.map((item) => item.id === order.id ? { ...item, status } : item));
+    try {
+      const updated = await sendJson<Order>(`/orders/${order.id}`, "PATCH", { status });
+      setOrderActionMessage(`Order ${updated.orderNumber} updated to ${updated.status}.`);
+      setDataVersion((current) => current + 1);
+    } catch (requestError) {
+      setOrders((current) => current.map((item) => item.id === order.id ? order : item));
+      setError(requestError instanceof Error ? requestError.message : "The order could not be updated.");
+    } finally {
+      setSavingOrderId(null);
+    }
+  }
 
   async function exportReport() {
     if (!summary || exporting) return;
@@ -186,13 +246,29 @@ function App() {
           <section id="orders" className="panel" aria-labelledby="orders-title">
             <div className="panel-heading">
               <div><p className="eyebrow">Fulfillment</p><h2 id="orders-title">Orders</h2></div>
-              {orderPagination.total > PAGE_SIZE && (
-                <button className="text-button" type="button" aria-expanded={showAllOrders} aria-controls="orders-table"
-                  onClick={() => { setShowAllOrders((current) => !current); setOrderPage(1); }}>
-                  {showAllOrders ? "Show pages" : "View all"}
+              <div className="panel-actions">
+                <button className="text-button" type="button" aria-expanded={showOrderForm} aria-controls="new-order-form"
+                  onClick={() => { setShowOrderForm((current) => !current); setOrderActionMessage(""); setOrderFormError(""); }}>
+                  {showOrderForm ? "Close form" : "New order"}
                 </button>
-              )}
+                {orderPagination.total > PAGE_SIZE && (
+                  <button className="text-button" type="button" aria-expanded={showAllOrders} aria-controls="orders-table"
+                    onClick={() => { setShowAllOrders((current) => !current); setOrderPage(1); }}>
+                    {showAllOrders ? "Show pages" : "View all"}
+                  </button>
+                )}
+              </div>
             </div>
+            {showOrderForm && (
+              <NewOrderForm
+                saving={creatingOrder}
+                error={orderFormError}
+                onErrorDismiss={() => setOrderFormError("")}
+                onCancel={() => { setShowOrderForm(false); setOrderFormError(""); }}
+                onSubmit={createOrder}
+              />
+            )}
+            {orderActionMessage && <p className="action-message" role="status">{orderActionMessage}</p>}
             <form className="filters" aria-label="Filter orders" onSubmit={(event) => {
               event.preventDefault(); setOrderSearch(orderSearchInput.trim()); setOrderStatus("all"); setOrderPage(1); setShowAllOrders(false);
             }}>
@@ -225,7 +301,13 @@ function App() {
                 <tbody>
                   {orders.map((order) => (
                     <tr key={order.id}><td className="strong">{order.orderNumber}</td><td>{order.customerName}</td>
-                      <td><span className={`status ${order.status}`}>{order.status}</span></td>
+                      <td><select className={`status-select ${order.status}`} aria-label={`Update status for ${order.orderNumber}`}
+                        value={order.status} disabled={savingOrderId === order.id}
+                        onChange={(event) => updateOrderStatus(order, event.target.value as OrderStatus)}>
+                        <option value="processing">Processing</option>
+                        <option value="shipped">Shipped</option>
+                        <option value="delivered">Delivered</option>
+                      </select></td>
                       <td>{money.format(order.total)}</td><td>{date.format(new Date(order.createdAt))}</td></tr>
                   ))}
                   {orders.length === 0 && <tr><td className="empty-state" colSpan={5}>No orders match these filters.</td></tr>}

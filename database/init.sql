@@ -10,12 +10,25 @@ CREATE TABLE IF NOT EXISTS products (
 
 CREATE TABLE IF NOT EXISTS orders (
   id SERIAL PRIMARY KEY,
-  order_number VARCHAR(24) UNIQUE NOT NULL,
+  order_number VARCHAR(7) UNIQUE NOT NULL
+    CONSTRAINT orders_order_number_format_check CHECK (order_number ~ '^BT-[0-9]{4}$'),
   customer_name VARCHAR(120) NOT NULL,
   status VARCHAR(24) NOT NULL,
   total NUMERIC(10, 2) NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE orders DROP COLUMN IF EXISTS sku;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orders_order_number_format_check') THEN
+    ALTER TABLE orders
+      ADD CONSTRAINT orders_order_number_format_check
+      CHECK (order_number ~ '^BT-[0-9]{4}$') NOT VALID;
+  END IF;
+END $$;
+
+ALTER TABLE orders VALIDATE CONSTRAINT orders_order_number_format_check;
 
 INSERT INTO products (sku, name, category, price, stock, reorder_level) VALUES
   ('TEE-BLK-M', 'Classic Black Tee', 'Apparel', 24.00, 42, 12),
@@ -32,4 +45,3 @@ INSERT INTO orders (order_number, customer_name, status, total, created_at) VALU
   ('BT-1045', 'Sample Customer D', 'processing', 24.00, NOW() - INTERVAL '2 days'),
   ('BT-1044', 'Sample Customer E', 'delivered', 76.00, NOW() - INTERVAL '3 days')
 ON CONFLICT (order_number) DO NOTHING;
-
