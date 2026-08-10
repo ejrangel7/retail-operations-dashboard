@@ -4,6 +4,10 @@ A portfolio-grade full-stack dashboard for monitoring retail orders, revenue, pr
 
 > All names, orders, products, and financial values in this repository are fictional demonstration data.
 
+## Live demo
+
+[Open the Retail Operations Dashboard](https://retail-operations-dashboard.onrender.com) to explore the production deployment.
+
 ## Why this project
 
 This project is designed to demonstrate more than isolated framework knowledge. It models a practical business workflow and shows how a frontend, API, database, container environment, and technical documentation fit together.
@@ -139,9 +143,9 @@ Order numbers must use the exact format `BT-0000`: the uppercase prefix `BT-` fo
 - Products accept `stock=low|in-stock`.
 - Collection responses include `items` plus page, page size, total results, and total pages.
 
-## Deployment readiness
+## Production deployment
 
-A zero-cost deployment architecture has been prepared but not provisioned. The root production `Dockerfile` packages React and Express into one same-origin service, while `render.yaml` fixes the proposed Render instance to the Free plan and keeps `DATABASE_URL` out of version control.
+The dashboard is deployed at [retail-operations-dashboard.onrender.com](https://retail-operations-dashboard.onrender.com). The root production `Dockerfile` packages React and Express into one same-origin service, while `render.yaml` fixes the Render instance to the Free plan and keeps `DATABASE_URL` out of version control.
 
 See [the zero-cost deployment evaluation](docs/deployment-evaluation.md) for the provider comparison, current limitations, cost guardrails, and the external steps that still require explicit authorization.
 
