@@ -23,6 +23,7 @@ services:
       PORT: 4000
       WEB_ORIGIN: http://localhost:8080
       COOKIE_SECURE: "false"
+      OPERATOR_LOGIN_ENABLED: "true"
     ports:
       - "4000:4000"
     depends_on:

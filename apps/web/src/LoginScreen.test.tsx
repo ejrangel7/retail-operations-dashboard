@@ -13,11 +13,11 @@ describe("LoginScreen", () => {
     const user = userEvent.setup();
     render(<LoginScreen submitting={false} error="" onSubmit={onSubmit} />);
 
-    await user.type(screen.getByLabelText("Email"), "operator@retail.local");
-    await user.type(screen.getByLabelText("Password"), "RetailOps!2026");
+    await user.type(screen.getByLabelText("Email"), "viewer@retail.local");
+    await user.type(screen.getByLabelText("Password"), "RetailView!2026");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
-    expect(onSubmit).toHaveBeenCalledWith("operator@retail.local", "RetailOps!2026");
+    expect(onSubmit).toHaveBeenCalledWith("viewer@retail.local", "RetailView!2026");
   });
 
   it("shows authentication feedback and submitting state", () => {
@@ -26,5 +26,6 @@ describe("LoginScreen", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Invalid email or password");
     expect(screen.getByRole("button", { name: "Signing in..." })).toBeDisabled();
     expect(screen.getByText(/viewer@retail.local/)).toBeInTheDocument();
+    expect(screen.queryByText(/operator@retail.local/)).not.toBeInTheDocument();
   });
 });

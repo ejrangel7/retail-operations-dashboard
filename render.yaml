@@ -11,3 +11,7 @@ services:
         sync: false
       - key: COOKIE_SECURE
         value: "true"
+      - key: OPERATOR_LOGIN_ENABLED
+        value: "false"
+      - key: TRUST_PROXY_HOPS
+        value: "1"
