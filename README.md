@@ -139,6 +139,20 @@ Order numbers must use the exact format `BT-0000`: the uppercase prefix `BT-` fo
 - Products accept `stock=low|in-stock`.
 - Collection responses include `items` plus page, page size, total results, and total pages.
 
+## Deployment readiness
+
+A zero-cost deployment architecture has been prepared but not provisioned. The root production `Dockerfile` packages React and Express into one same-origin service, while `render.yaml` fixes the proposed Render instance to the Free plan and keeps `DATABASE_URL` out of version control.
+
+See [the zero-cost deployment evaluation](docs/deployment-evaluation.md) for the provider comparison, current limitations, cost guardrails, and the external steps that still require explicit authorization.
+
+### Validate the production image locally
+
+```bash
+docker build -t retail-operations-dashboard:production .
+```
+
+The container listens on port `10000`, serves the dashboard and API from the same origin, and initializes the idempotent fictional schema from `database/init.sql`.
+
 ## Roadmap
 
 - [x] Full-stack project foundation
@@ -151,7 +165,7 @@ Order numbers must use the exact format `BT-0000`: the uppercase prefix `BT-` fo
 - [x] Unit and integration tests
 - [x] GitHub Actions continuous integration
 - [x] Accessible charts and reporting
-- [ ] Low-cost or zero-cost deployment evaluation
+- [x] Low-cost or zero-cost deployment evaluation
 
 ## Data and privacy
 
