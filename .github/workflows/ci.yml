@@ -39,3 +39,6 @@ jobs:
 
       - name: Verify
         run: pnpm verify
+
+      - name: Build production image
+        run: docker build --tag retail-operations-dashboard:ci .

@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Pool } from "pg";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -180,6 +183,23 @@ describe("Retail Operations API", () => {
     const missingPool = poolWithRows([]);
     const missing = await request(createTestApp(missingPool)).patch("/api/orders/999").send({ status: "delivered" });
     expect(missing.status).toBe(404);
+  });
+
+  it("serves the production frontend without masking unknown API routes", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "retail-static-"));
+    try {
+      await writeFile(join(directory, "index.html"), "<main>Retail production shell</main>");
+      const app = createApp(poolWithRows(), { authRequired: false, staticAssetsPath: directory });
+
+      const frontend = await request(app).get("/reports");
+      const missingApi = await request(app).get("/api/missing");
+
+      expect(frontend.status).toBe(200);
+      expect(frontend.text).toContain("Retail production shell");
+      expect(missingApi.status).toBe(404);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it("returns a safe error response when the database fails", async () => {

@@ -69,7 +69,7 @@ function isPostgresError(error: unknown, code: string) {
   return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
-export function createApp(pool: Pool, options: { authRequired?: boolean; secureCookies?: boolean } = {}) {
+export function createApp(pool: Pool, options: { authRequired?: boolean; secureCookies?: boolean; staticAssetsPath?: string } = {}) {
   const app = express();
   app.use(cors({ origin: process.env.WEB_ORIGIN ?? "http://localhost:8080", credentials: true }));
   app.use(express.json());
@@ -212,6 +212,14 @@ export function createApp(pool: Pool, options: { authRequired?: boolean; secureC
     if (result.rows.length === 0) { response.status(404).json({ message: "Order not found" }); return; }
     response.json(result.rows[0]);
   });
+
+  if (options.staticAssetsPath) {
+    app.use(express.static(options.staticAssetsPath));
+    app.use((request, response, next) => {
+      if (request.method !== "GET" || request.path === "/api" || request.path.startsWith("/api/")) { next(); return; }
+      response.sendFile("index.html", { root: options.staticAssetsPath });
+    });
+  }
 
   app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
     console.error(error);
