@@ -99,7 +99,12 @@ export function requireRole(role: UserRole): RequestHandler {
   };
 }
 
-export function registerAuthRoutes(app: express.Express, pool: Pool, secureCookies: boolean) {
+export function registerAuthRoutes(
+  app: express.Express,
+  pool: Pool,
+  secureCookies: boolean,
+  operatorLoginEnabled = true,
+) {
   app.post("/api/auth/login", async (request, response) => {
     const email = typeof request.body?.email === "string" ? request.body.email.trim().toLowerCase() : "";
     const password = typeof request.body?.password === "string" ? request.body.password : "";
@@ -117,6 +122,11 @@ export function registerAuthRoutes(app: express.Express, pool: Pool, secureCooki
     const user = result.rows[0];
     if (!user || !(await passwordMatches(password, user.passwordSalt, user.passwordHash))) {
       response.status(401).json({ message: "Invalid email or password" });
+      return;
+    }
+
+    if (user.role === "operator" && !operatorLoginEnabled) {
+      response.status(403).json({ message: "Operator sign-in is disabled in the public demo" });
       return;
     }
 

@@ -16,7 +16,7 @@ export function LoginScreen({ submitting, error, onSubmit }: Props) {
         <div className="login-brand"><span className="brand-mark">RO</span><span>Retail Ops</span></div>
         <p className="eyebrow">Secure operations workspace</p>
         <h1 id="login-title">Sign in</h1>
-        <p className="login-intro">Use a fictional demo account to access the retail dashboard.</p>
+        <p className="login-intro">Use the fictional read-only account to explore the public dashboard.</p>
         {error && <div className="login-error" role="alert">{error}</div>}
         <form className="login-form" aria-label="Sign in" onSubmit={async (event) => {
           event.preventDefault();
@@ -24,7 +24,7 @@ export function LoginScreen({ submitting, error, onSubmit }: Props) {
         }}>
           <label>Email
             <input type="email" autoComplete="username" value={email}
-              onChange={(event) => setEmail(event.target.value)} placeholder="operator@retail.local" required />
+              onChange={(event) => setEmail(event.target.value)} placeholder="viewer@retail.local" required />
           </label>
           <label>Password
             <input type="password" autoComplete="current-password" value={password}
@@ -35,10 +35,9 @@ export function LoginScreen({ submitting, error, onSubmit }: Props) {
           </button>
         </form>
         <div className="demo-accounts" aria-label="Demo accounts">
-          <p><strong>Operator</strong><span>operator@retail.local / RetailOps!2026</span></p>
           <p><strong>Viewer</strong><span>viewer@retail.local / RetailView!2026</span></p>
         </div>
-        <p className="login-disclaimer">Fictional credentials for this local portfolio environment only.</p>
+        <p className="login-disclaimer">Operator access is restricted to local development.</p>
       </section>
     </main>
   );

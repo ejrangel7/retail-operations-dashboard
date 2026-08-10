@@ -68,10 +68,10 @@ Then open:
 
 | Role | Email | Password | Access |
 | --- | --- | --- | --- |
-| Operator | `operator@retail.local` | `RetailOps!2026` | Read, export, create orders, update fulfillment |
-| Viewer | `viewer@retail.local` | `RetailView!2026` | Read and export only |
+| Operator | `operator@retail.local` | `RetailOps!2026` | Local development only; read, export, create orders, update fulfillment |
+| Viewer | `viewer@retail.local` | `RetailView!2026` | Local and public demo; read and export only |
 
-These credentials are fictional and are intended exclusively for the local portfolio environment.
+These credentials are fictional. Operator sign-in and order mutations are disabled in the public deployment.
 
 Stop the environment with:
 
@@ -129,8 +129,10 @@ Dashboard, product, order, and current-user endpoints require an active session.
 - Session tokens are random, returned only in an `HttpOnly` and `SameSite=Lax` cookie, and stored in PostgreSQL only as SHA-256 hashes.
 - Sessions expire after eight hours and are revoked server-side on logout.
 - CORS allows credentials only for the configured frontend origin.
+- Login attempts and order mutations are rate-limited.
+- The public deployment disables operator sign-in and all order mutations, including sessions created previously.
 - Local Docker uses HTTP and therefore sets `COOKIE_SECURE=false`; an HTTPS deployment must set `COOKIE_SECURE=true`.
-- This portfolio implementation does not include account recovery, MFA, rate limiting, or an external identity provider.
+- This portfolio implementation does not include account recovery, MFA, or an external identity provider.
 
 ### Order number convention
 

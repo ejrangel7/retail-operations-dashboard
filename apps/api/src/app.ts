@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import { rateLimit } from "express-rate-limit";
 import type { Pool } from "pg";
 import { authenticate, registerAuthRoutes, requireRole } from "./auth.js";
 
@@ -69,21 +70,70 @@ function isPostgresError(error: unknown, code: string) {
   return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
-export function createApp(pool: Pool, options: { authRequired?: boolean; secureCookies?: boolean; staticAssetsPath?: string } = {}) {
+type AppOptions = {
+  authRequired?: boolean;
+  operatorLoginEnabled?: boolean;
+  rateLimitsEnabled?: boolean;
+  secureCookies?: boolean;
+  staticAssetsPath?: string;
+  trustProxyHops?: number;
+};
+
+export function createApp(pool: Pool, options: AppOptions = {}) {
   const app = express();
+  const operatorLoginEnabled = options.operatorLoginEnabled ?? (
+    process.env.OPERATOR_LOGIN_ENABLED === undefined
+      ? process.env.NODE_ENV !== "production"
+      : process.env.OPERATOR_LOGIN_ENABLED === "true"
+  );
+  const rateLimitsEnabled = options.rateLimitsEnabled ?? process.env.RATE_LIMITS_ENABLED !== "false";
+  const trustProxyHops = options.trustProxyHops
+    ?? Number(process.env.TRUST_PROXY_HOPS ?? (process.env.NODE_ENV === "production" ? 1 : 0));
+  if (trustProxyHops > 0) app.set("trust proxy", trustProxyHops);
   app.use(cors({ origin: process.env.WEB_ORIGIN ?? "http://localhost:8080", credentials: true }));
   app.use(express.json());
+
+  if (rateLimitsEnabled) {
+    app.use("/api/auth/login", rateLimit({
+      windowMs: 15 * 60 * 1000,
+      limit: 10,
+      skipSuccessfulRequests: true,
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      message: { message: "Too many sign-in attempts. Please try again later." },
+    }));
+  }
 
   app.get("/api/health", async (_request, response) => {
     const result = await pool.query<{ now: string }>("SELECT NOW() AS now");
     response.json({ status: "ok", databaseTime: result.rows[0].now });
   });
 
-  registerAuthRoutes(app, pool, options.secureCookies ?? process.env.COOKIE_SECURE === "true");
+  registerAuthRoutes(
+    app,
+    pool,
+    options.secureCookies ?? process.env.COOKIE_SECURE === "true",
+    operatorLoginEnabled,
+  );
   if (options.authRequired !== false) app.use("/api", authenticate(pool));
   const operatorOnly: express.RequestHandler = options.authRequired === false
     ? (_request, _response, next) => next()
-    : requireRole("operator");
+    : operatorLoginEnabled
+      ? requireRole("operator")
+      : (_request, response) => {
+          response.status(403).json({ message: "Order changes are disabled in the public demo" });
+        };
+
+  if (rateLimitsEnabled) {
+    app.use("/api/orders", rateLimit({
+      windowMs: 60 * 1000,
+      limit: 30,
+      skip: (request) => request.method !== "POST" && request.method !== "PATCH",
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      message: { message: "Too many order changes. Please try again later." },
+    }));
+  }
 
   app.get("/api/dashboard", async (_request, response) => {
     const [products, orders, revenue, lowStock] = await Promise.all([
