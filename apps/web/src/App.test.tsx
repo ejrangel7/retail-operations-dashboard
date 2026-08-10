@@ -18,6 +18,17 @@ const orders = Array.from({ length: 4 }, (_, index) => ({
   createdAt: "2026-08-07T12:00:00.000Z",
 }));
 
+const insights = {
+  orderStatus: [
+    { status: "processing", orderCount: 2, revenue: 51 },
+    { status: "shipped", orderCount: 1, revenue: 27 },
+    { status: "delivered", orderCount: 1, revenue: 28 },
+  ],
+  inventoryByCategory: [
+    { category: "Accessories", productCount: 4, stockUnits: 10, lowStockItems: 3 },
+  ],
+};
+
 const products = Array.from({ length: 4 }, (_, index) => ({
   id: index + 1,
   sku: `SKU-00${index + 1}`,
@@ -61,6 +72,9 @@ function mockDashboardRequests(duplicateOrder = false, authenticatedUser = opera
     if (url.pathname.endsWith("/dashboard")) {
       return Promise.resolve(new Response(JSON.stringify({ totalProducts: 4, totalOrders: 4, revenue: 106, lowStockItems: 3 })));
     }
+    if (url.pathname.endsWith("/reports/operations")) {
+      return Promise.resolve(new Response(JSON.stringify(insights)));
+    }
     const pageSize = Number(url.searchParams.get("pageSize"));
     const currentPage = Number(url.searchParams.get("page"));
     const start = (currentPage - 1) * pageSize;
@@ -86,6 +100,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("$106.00")).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Operations insights" })).toBeInTheDocument();
     expect(await screen.findByText("ORD-003")).toBeInTheDocument();
     expect(screen.queryByText("ORD-004")).not.toBeInTheDocument();
     expect(within(screen.getByRole("navigation", { name: "Orders pagination" })).getByText("Page 1 of 2")).toBeInTheDocument();

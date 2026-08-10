@@ -18,6 +18,7 @@ This project is designed to demonstrate more than isolated framework knowledge. 
 - Reproducible local environment with Docker Compose
 - Seeded, fictional retail data
 - PostgreSQL-backed login sessions and role-based order permissions
+- Accessible operations charts with equivalent reporting tables
 
 ## Tech stack
 
@@ -110,6 +111,7 @@ retail-operations-dashboard/
 | GET | `/api/auth/me` | Return the authenticated user |
 | POST | `/api/auth/logout` | Revoke the current session |
 | GET | `/api/dashboard` | Authenticated summary metrics |
+| GET | `/api/reports/operations` | Fulfillment and inventory reporting aggregates |
 | GET | `/api/products` | Filtered and paginated inventory data |
 | GET | `/api/orders` | Filtered and paginated orders |
 | POST | `/api/orders` | Create a validated order |
@@ -148,7 +150,7 @@ Order numbers must use the exact format `BT-0000`: the uppercase prefix `BT-` fo
 - [x] Authentication and role-based access
 - [x] Unit and integration tests
 - [x] GitHub Actions continuous integration
-- [ ] Accessible charts and reporting
+- [x] Accessible charts and reporting
 - [ ] Low-cost or zero-cost deployment evaluation
 
 ## Data and privacy
