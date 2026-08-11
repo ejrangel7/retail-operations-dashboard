@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
+import helmet from "helmet";
 import type { Pool } from "pg";
 import { authenticate, registerAuthRoutes, requireRole } from "./auth.js";
 
@@ -72,25 +73,46 @@ function isPostgresError(error: unknown, code: string) {
 
 type AppOptions = {
   authRequired?: boolean;
+  isProduction?: boolean;
   operatorLoginEnabled?: boolean;
   rateLimitsEnabled?: boolean;
   secureCookies?: boolean;
   staticAssetsPath?: string;
   trustProxyHops?: number;
+  webOrigin?: string | false;
 };
 
 export function createApp(pool: Pool, options: AppOptions = {}) {
   const app = express();
+  const isProduction = options.isProduction ?? process.env.NODE_ENV === "production";
   const operatorLoginEnabled = options.operatorLoginEnabled ?? (
     process.env.OPERATOR_LOGIN_ENABLED === undefined
-      ? process.env.NODE_ENV !== "production"
+      ? !isProduction
       : process.env.OPERATOR_LOGIN_ENABLED === "true"
   );
   const rateLimitsEnabled = options.rateLimitsEnabled ?? process.env.RATE_LIMITS_ENABLED !== "false";
   const trustProxyHops = options.trustProxyHops
-    ?? Number(process.env.TRUST_PROXY_HOPS ?? (process.env.NODE_ENV === "production" ? 1 : 0));
+    ?? Number(process.env.TRUST_PROXY_HOPS ?? (isProduction ? 1 : 0));
+  const webOrigin = options.webOrigin === false
+    ? undefined
+    : options.webOrigin
+      ?? process.env.WEB_ORIGIN
+      ?? process.env.RENDER_EXTERNAL_URL
+      ?? (isProduction ? undefined : "http://localhost:8080");
   if (trustProxyHops > 0) app.set("trust proxy", trustProxyHops);
-  app.use(cors({ origin: process.env.WEB_ORIGIN ?? "http://localhost:8080", credentials: true }));
+  app.disable("x-powered-by");
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: { upgradeInsecureRequests: isProduction ? [] : null },
+    },
+    ...(isProduction ? {} : { strictTransportSecurity: false }),
+  }));
+  if (webOrigin) {
+    app.use(cors({
+      origin: (requestOrigin, callback) => callback(null, !requestOrigin || requestOrigin === webOrigin),
+      credentials: true,
+    }));
+  }
   app.use(express.json());
 
   if (rateLimitsEnabled) {

@@ -77,28 +77,16 @@ describe("authentication and authorization", () => {
   });
 
   it("disables operator sign-in by default in production", async () => {
-    const previousNodeEnv = process.env.NODE_ENV;
-    const previousOperatorSetting = process.env.OPERATOR_LOGIN_ENABLED;
-    process.env.NODE_ENV = "production";
-    delete process.env.OPERATOR_LOGIN_ENABLED;
+    const salt = "0123456789abcdef0123456789abcdef";
+    const passwordHash = scryptSync("RetailOps!2026", salt, 64).toString("hex");
+    const pool = poolWithRows([{ ...operator, passwordSalt: salt, passwordHash }]);
 
-    try {
-      const salt = "0123456789abcdef0123456789abcdef";
-      const passwordHash = scryptSync("RetailOps!2026", salt, 64).toString("hex");
-      const pool = poolWithRows([{ ...operator, passwordSalt: salt, passwordHash }]);
+    const response = await request(createApp(pool, { isProduction: true, rateLimitsEnabled: false }))
+      .post("/api/auth/login")
+      .send({ email: operator.email, password: "RetailOps!2026" });
 
-      const response = await request(createApp(pool, { rateLimitsEnabled: false }))
-        .post("/api/auth/login")
-        .send({ email: operator.email, password: "RetailOps!2026" });
-
-      expect(response.status).toBe(403);
-      expect(response.body).toEqual({ message: "Operator sign-in is disabled in the public demo" });
-    } finally {
-      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = previousNodeEnv;
-      if (previousOperatorSetting === undefined) delete process.env.OPERATOR_LOGIN_ENABLED;
-      else process.env.OPERATOR_LOGIN_ENABLED = previousOperatorSetting;
-    }
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ message: "Operator sign-in is disabled in the public demo" });
   });
 
   it("keeps viewer sign-in available in the public demo", async () => {
