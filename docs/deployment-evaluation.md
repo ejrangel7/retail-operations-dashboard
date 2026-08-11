@@ -1,12 +1,18 @@
-# Zero-cost deployment evaluation
+# Production deployment and zero-cost evaluation
 
-_Last reviewed: August 10, 2026._
+_Last reviewed: August 11, 2026._
 
-## Decision
+## Current status
 
-Use one Render Free web service built from the repository root `Dockerfile`, connected to one Neon Free PostgreSQL project.
+The public portfolio deployment is active at [retail-operations-dashboard.onrender.com](https://retail-operations-dashboard.onrender.com):
 
-This is a deployment-ready recommendation only. No external account, database, web service, domain, payment method, or billable resource is created by this repository.
+- one Render Free web service built from the repository root `Dockerfile`
+- one Neon Free PostgreSQL database containing fictional demonstration data
+- GitHub Actions validation for pull requests and pushes to `main`
+- automatic Render deployment after the checks on `main` pass
+- `/api/health` as the Render health check
+
+The checked-in `render.yaml` is the reproducible Blueprint specification and the source of truth for intended settings. The existing Render service must remain manually aligned with it when settings change. Secrets and provider-owned identifiers are intentionally not stored in the repository.
 
 ## Why this architecture
 
@@ -14,7 +20,7 @@ The production image compiles React with `VITE_API_URL=/api`, serves the static 
 
 On startup, the container executes the idempotent `database/init.sql` file. This creates the schema and fictional demo records when the database is empty and safely rechecks them after a cold start.
 
-The root `render.yaml` explicitly declares:
+The root `render.yaml` declares:
 
 - `runtime: docker`
 - `plan: free`
@@ -22,6 +28,19 @@ The root `render.yaml` explicitly declares:
 - `/api/health` as the health check
 - `DATABASE_URL` as an unversioned secret
 - secure cookies for Render HTTPS
+- disabled operator login for the public demo
+- one trusted proxy hop for Render
+
+## Deployment flow
+
+1. Open a pull request against `main`.
+2. GitHub Actions runs `pnpm verify` and builds the production Docker image.
+3. Review and merge only after the pull-request check passes.
+4. GitHub Actions repeats the validation for the resulting `main` commit.
+5. Render deploys after the `main` check passes and accepts the release only when `/api/health` succeeds.
+6. Run the production verification checklist below.
+
+This repeats the same repository-owned verification locally and in CI; it does not maintain separate validation logic.
 
 ## Current free-tier facts
 
@@ -74,15 +93,26 @@ Official alternative references:
 6. Review provider limits again immediately before any real deployment because pricing can change.
 7. Stop and request explicit authorization before enabling any paid feature.
 
-## Deployment steps requiring user authorization
+## Production verification checklist
 
-1. Create a Neon Free project and copy its pooled TLS connection string.
-2. In Render, create a Blueprint from this repository.
-3. Confirm that the proposed service shows `Free`, not `Starter` or another paid plan.
-4. Enter the Neon connection string when Render prompts for `DATABASE_URL`.
-5. Deploy and verify `/api/health`, operator login, viewer read-only access, and CSV export.
+1. Confirm the GitHub Actions run for the merged `main` commit succeeded.
+2. Confirm `GET https://retail-operations-dashboard.onrender.com/api/health` returns HTTP 200 and `{"status":"ok"}`.
+3. Confirm the response includes production security headers such as CSP, HSTS, `X-Content-Type-Options`, and `X-Frame-Options`, without `X-Powered-By`.
+4. Confirm the viewer can sign in, read dashboard data, filter and paginate collections, view charts, and export CSV.
+5. Confirm operator sign-in and order mutations remain blocked in the public demo.
+6. Confirm no real customer, order, credential, or financial data was introduced.
 
-These steps mutate external services and are intentionally not automated or executed without explicit approval.
+## Changes requiring explicit authorization
+
+The existing deployment may receive application updates through the reviewed `main` workflow. Stop and request explicit user authorization before:
+
+- creating, deleting, or replacing a Render or Neon resource
+- changing either provider away from its Free plan
+- adding a payment method, custom domain, paid add-on, or paid monitoring service
+- rotating or replacing production secrets unless the user explicitly requests that maintenance
+- importing non-fictional or sensitive data
+
+No repository change is permission to incur charges.
 
 ## Local production-image validation
 
