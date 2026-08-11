@@ -17,7 +17,9 @@ services:
       retries: 10
 
   api:
-    build: ./apps/api
+    build:
+      context: .
+      target: api-runtime
     environment:
       DATABASE_URL: postgresql://retail:retail@database:5432/retail_ops
       PORT: 4000
@@ -31,7 +33,11 @@ services:
         condition: service_healthy
 
   web:
-    build: ./apps/web
+    build:
+      context: .
+      target: web-runtime
+      args:
+        VITE_API_URL: http://localhost:4000/api
     ports:
       - "8080:80"
     depends_on:

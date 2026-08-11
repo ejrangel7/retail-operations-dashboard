@@ -10,7 +10,12 @@
     "build": "pnpm --recursive build",
     "test": "pnpm --recursive test",
     "typecheck": "pnpm --recursive typecheck",
-    "verify": "pnpm typecheck && pnpm test && pnpm build"
+    "verify": "pnpm typecheck && pnpm test && pnpm build",
+    "test:e2e": "playwright test",
+    "screenshots": "node scripts/capture-readme-screenshots.mjs"
   },
-  "packageManager": "pnpm@10.15.0"
+  "packageManager": "pnpm@10.15.0",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
 }

@@ -23,6 +23,15 @@ This project is designed to demonstrate more than isolated framework knowledge. 
 - Seeded, fictional retail data
 - PostgreSQL-backed login sessions and role-based order permissions
 - Accessible operations charts with equivalent reporting tables
+- Playwright end-to-end coverage for authentication, navigation, and filters
+
+## Product preview
+
+[![Retail Operations Dashboard overview](docs/images/dashboard-overview.png)](https://retail-operations-dashboard.onrender.com)
+
+The authenticated overview presents operational KPIs, fulfillment activity, inventory risk, and production reporting in one responsive workspace.
+
+![Operations insights with fulfillment and inventory charts](docs/images/dashboard-insights.png)
 
 ## Tech stack
 
@@ -31,6 +40,8 @@ This project is designed to demonstrate more than isolated framework knowledge. 
 - **Database:** PostgreSQL
 - **Infrastructure:** Docker, Docker Compose, Nginx
 - **Package management:** pnpm workspaces
+- **Testing:** Vitest, Testing Library, Playwright
+- **CI/CD:** GitHub Actions, Render
 
 ## Architecture
 
@@ -94,15 +105,37 @@ pnpm dev
 
 The frontend runs on `http://localhost:5173` and the API on `http://localhost:4000`.
 
+## End-to-end tests
+
+The Playwright suite exercises the real Docker Compose stack, including PostgreSQL, login sessions, navigation, and server-backed filters.
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+Playwright reuses an existing application at `http://localhost:8080` or starts `docker compose up --build` and waits for it automatically. GitHub Actions runs the Chromium project after typecheck, unit tests, builds, and the production-image build pass.
+
+Refresh the README screenshots from the public viewer experience with:
+
+```bash
+pnpm screenshots
+```
+
 ## Repository structure
 
 ```text
 retail-operations-dashboard/
+├── .github/workflows/ # Continuous integration
 ├── apps/
 │   ├── api/          # Express REST API
 │   └── web/          # React dashboard
 ├── database/         # PostgreSQL schema and demo seed data
+├── docs/images/      # README product screenshots
+├── e2e/              # Playwright browser tests
+├── scripts/          # Repeatable maintenance scripts
 ├── docker-compose.yml
+├── Dockerfile        # Reproducible multi-stage production and local targets
 └── README.md
 ```
 
@@ -148,7 +181,7 @@ Order numbers must use the exact format `BT-0000`: the uppercase prefix `BT-` fo
 
 ## Production deployment
 
-The dashboard is deployed at [retail-operations-dashboard.onrender.com](https://retail-operations-dashboard.onrender.com) using a Render Free web service and a Neon Free PostgreSQL database. The root production `Dockerfile` packages React and Express into one same-origin service. `render.yaml` records the reproducible Render configuration, fixes the instance to the Free plan, and keeps `DATABASE_URL` out of version control.
+The dashboard is deployed at [retail-operations-dashboard.onrender.com](https://retail-operations-dashboard.onrender.com) using a Render Free web service and a Neon Free PostgreSQL database. The root production `Dockerfile` installs the pnpm workspace from the committed lockfile, packages React and Express into one same-origin service, and runs Node as the non-privileged `node` user. `render.yaml` records the reproducible Render configuration, fixes the instance to the Free plan, and keeps `DATABASE_URL` out of version control.
 
 Production changes follow this path:
 
@@ -192,6 +225,7 @@ The endpoint must return HTTP `200` with `"status":"ok"`. Complete the browser s
 - [x] Create and update order workflows
 - [x] Authentication and role-based access
 - [x] Unit and integration tests
+- [x] Playwright end-to-end tests
 - [x] GitHub Actions continuous integration
 - [x] Accessible charts and reporting
 - [x] Low-cost or zero-cost deployment evaluation
@@ -199,6 +233,10 @@ The endpoint must return HTTP `200` with `"status":"ok"`. Complete the browser s
 ## Data and privacy
 
 This repository does not contain customer information, store credentials, private business data, or production integrations. It is an independent portfolio project built with fictional data.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE). It may be used, copied, modified, and distributed when the copyright and license notice are preserved. The software is provided without warranty.
 
 ## Author
 
