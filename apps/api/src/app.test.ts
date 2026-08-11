@@ -14,7 +14,10 @@ function poolWithRows(...rows: unknown[][]) {
   } as unknown as Pool;
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 describe("Retail Operations API", () => {
   it("reports database health", async () => {
@@ -22,6 +25,49 @@ describe("Retail Operations API", () => {
     const response = await request(createTestApp(pool)).get("/api/health");
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: "ok", databaseTime: "2026-08-07T12:00:00.000Z" });
+    expect(response.headers).not.toHaveProperty("strict-transport-security");
+    expect(response.headers["content-security-policy"]).not.toContain("upgrade-insecure-requests");
+    expect(response.headers).not.toHaveProperty("x-powered-by");
+  });
+
+  it("sets production security headers and allows Render's own origin", async () => {
+    const origin = "https://retail-operations-dashboard.onrender.com";
+    vi.stubEnv("RENDER_EXTERNAL_URL", origin);
+    const pool = poolWithRows([{ now: "2026-08-07T12:00:00.000Z" }]);
+
+    const response = await request(createApp(pool, {
+      authRequired: false,
+      isProduction: true,
+      rateLimitsEnabled: false,
+    }))
+      .get("/api/health")
+      .set("Origin", origin);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["access-control-allow-origin"]).toBe(origin);
+    expect(response.headers["access-control-allow-credentials"]).toBe("true");
+    expect(response.headers["content-security-policy"]).toContain("default-src 'self'");
+    expect(response.headers["content-security-policy"]).toContain("upgrade-insecure-requests");
+    expect(response.headers["strict-transport-security"]).toContain("max-age=31536000");
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
+    expect(response.headers["x-frame-options"]).toBe("SAMEORIGIN");
+    expect(response.headers).not.toHaveProperty("x-powered-by");
+  });
+
+  it("does not authorize an untrusted cross-origin request", async () => {
+    vi.stubEnv("RENDER_EXTERNAL_URL", "https://retail-operations-dashboard.onrender.com");
+
+    const response = await request(createApp(poolWithRows(), {
+      authRequired: false,
+      isProduction: true,
+      rateLimitsEnabled: false,
+    }))
+      .options("/api/auth/login")
+      .set("Origin", "https://untrusted.example")
+      .set("Access-Control-Request-Method", "POST");
+
+    expect(response.headers).not.toHaveProperty("access-control-allow-origin");
+    expect(response.headers).not.toHaveProperty("access-control-allow-credentials");
   });
 
   it("converts dashboard aggregate values to numbers", async () => {
