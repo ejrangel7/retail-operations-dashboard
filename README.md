@@ -148,9 +148,21 @@ Order numbers must use the exact format `BT-0000`: the uppercase prefix `BT-` fo
 
 ## Production deployment
 
-The dashboard is deployed at [retail-operations-dashboard.onrender.com](https://retail-operations-dashboard.onrender.com). The root production `Dockerfile` packages React and Express into one same-origin service, while `render.yaml` fixes the Render instance to the Free plan and keeps `DATABASE_URL` out of version control.
+The dashboard is deployed at [retail-operations-dashboard.onrender.com](https://retail-operations-dashboard.onrender.com) using a Render Free web service and a Neon Free PostgreSQL database. The root production `Dockerfile` packages React and Express into one same-origin service. `render.yaml` records the reproducible Render configuration, fixes the instance to the Free plan, and keeps `DATABASE_URL` out of version control.
 
-See [the zero-cost deployment evaluation](docs/deployment-evaluation.md) for the provider comparison, current limitations, cost guardrails, and the external steps that still require explicit authorization.
+Production changes follow this path:
+
+```text
+Pull request -> GitHub Actions (`pnpm verify` + Docker build)
+             -> merge to `main`
+             -> checks pass on `main`
+             -> Render deploy
+             -> `/api/health` health check
+```
+
+Render supplies its external URL to the application at runtime. Production also uses secure cookies, trusts one Render proxy hop, and disables operator sign-in and order mutations for the public demo. Deployment settings and secrets must remain aligned with `render.yaml`; never commit `DATABASE_URL`.
+
+See [the deployment and cost evaluation](docs/deployment-evaluation.md) for the current production status, provider limitations, verification procedure, and cost guardrails.
 
 ### Validate the production image locally
 
@@ -159,6 +171,16 @@ docker build -t retail-operations-dashboard:production .
 ```
 
 The container listens on port `10000`, serves the dashboard and API from the same origin, and initializes the idempotent fictional schema from `database/init.sql`.
+
+### Verify production
+
+After a deployment, confirm the GitHub Actions run for `main` passed, then verify:
+
+```bash
+curl --fail --show-error https://retail-operations-dashboard.onrender.com/api/health
+```
+
+The endpoint must return HTTP `200` with `"status":"ok"`. Complete the browser smoke test by signing in as the viewer, checking dashboard data, filters, pagination, charts, and CSV export. Operator sign-in and all order mutations must remain unavailable in the public demo.
 
 ## Roadmap
 
