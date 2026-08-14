@@ -94,12 +94,13 @@ docker compose down
 
 ### Prerequisites
 
-- Node.js 22+
-- pnpm
+- Node.js 22.23.2 (see `.nvmrc`)
+- Corepack with pnpm 10.15.0
 - PostgreSQL 16+
 
 ```bash
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
@@ -110,7 +111,7 @@ The frontend runs on `http://localhost:5173` and the API on `http://localhost:40
 The Playwright suite exercises the real Docker Compose stack, including PostgreSQL, login sessions, navigation, and server-backed filters.
 
 ```bash
-pnpm exec playwright install chromium
+pnpm exec playwright install --with-deps chromium
 pnpm test:e2e
 ```
 
