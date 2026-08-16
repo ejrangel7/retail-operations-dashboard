@@ -10,6 +10,7 @@ The public portfolio deployment is active at [retail-operations-dashboard.onrend
 - one Neon Free PostgreSQL database containing fictional demonstration data
 - GitHub Actions validation for pull requests and pushes to `main`
 - immutable SHA-pinned Actions and scheduled Dependabot checks for npm, Docker, and workflows
+- structured security events in the existing Render log stream, with process-scoped identifier fingerprints
 - automatic Render deployment after the checks on `main` pass
 - `/api/health` as the Render health check
 
@@ -102,7 +103,8 @@ Official alternative references:
 3. Confirm the response includes production security headers such as CSP, HSTS, `X-Content-Type-Options`, and `X-Frame-Options`, without `X-Powered-By`.
 4. Confirm the viewer can sign in, read dashboard data, filter and paginate collections, view charts, and export CSV.
 5. Confirm the known local operator credentials receive HTTP 401 in production and order mutations remain blocked.
-6. Confirm no real customer, order, credential, or financial data was introduced.
+6. Confirm blocked authentication or rate-limit activity appears as JSON with `"category":"security"` and does not expose raw credentials, tokens, email addresses, or client addresses.
+7. Confirm no real customer, order, credential, or financial data was introduced.
 
 ## Changes requiring explicit authorization
 

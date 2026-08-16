@@ -33,7 +33,13 @@ describe("Retail Operations API", () => {
   it("rate-limits public database health checks", async () => {
     const now = "2026-08-07T12:00:00.000Z";
     const pool = poolWithRows(...Array.from({ length: 60 }, () => [{ now }]));
-    const app = createApp(pool, { authRequired: false, rateLimitsEnabled: true, trustProxyHops: 1 });
+    const securityLogger = vi.fn();
+    const app = createApp(pool, {
+      authRequired: false,
+      rateLimitsEnabled: true,
+      securityLogger,
+      trustProxyHops: 1,
+    });
 
     for (let attempt = 0; attempt < 60; attempt += 1) {
       const response = await request(app)
@@ -45,10 +51,34 @@ describe("Retail Operations API", () => {
     const limited = await request(app)
       .get("/api/health")
       .set("X-Forwarded-For", "203.0.113.20");
+    const repeatedLimit = await request(app)
+      .get("/api/health")
+      .set("X-Forwarded-For", "203.0.113.20");
     expect(limited.status).toBe(429);
+    expect(repeatedLimit.status).toBe(429);
     expect(limited.body).toEqual({ message: "Too many health checks. Please try again later." });
     expect(limited.headers["ratelimit"]).toContain("health-check");
     expect(vi.mocked(pool.query)).toHaveBeenCalledTimes(60);
+    expect(securityLogger).toHaveBeenCalledTimes(1);
+    expect(securityLogger).toHaveBeenCalledWith(expect.objectContaining({
+      category: "security",
+      event: "rate_limit.exceeded",
+      outcome: "blocked",
+      reason: "request_volume_exceeded",
+      statusCode: 429,
+      control: {
+        name: "health-check",
+        limit: 60,
+        windowMs: 60_000,
+        observedRequests: 61,
+      },
+      request: expect.objectContaining({
+        method: "GET",
+        path: "/api/health",
+        clientFingerprint: expect.stringMatching(/^[a-f0-9]{16}$/),
+      }),
+    }));
+    expect(JSON.stringify(securityLogger.mock.calls)).not.toContain("203.0.113.20");
   });
 
   it("applies a global limit before protected API work", async () => {
@@ -311,9 +341,21 @@ describe("Retail Operations API", () => {
 
   it("returns a safe error response when the database fails", async () => {
     const pool = { query: vi.fn().mockRejectedValue(new Error("database unavailable")) } as unknown as Pool;
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const response = await request(createTestApp(pool)).get("/api/products");
+    const securityLogger = vi.fn();
+    const response = await request(createApp(pool, {
+      authRequired: false,
+      securityLogger,
+    })).get("/api/products");
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ message: "Unexpected server error" });
+    expect(securityLogger).toHaveBeenCalledWith(expect.objectContaining({
+      severity: "error",
+      event: "application.unexpected_error",
+      outcome: "error",
+      reason: "unhandled_request_error",
+      error: { name: "Error" },
+      statusCode: 500,
+    }));
+    expect(JSON.stringify(securityLogger.mock.calls)).not.toContain("database unavailable");
   });
 });

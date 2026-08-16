@@ -4,6 +4,12 @@ import { rateLimit } from "express-rate-limit";
 import helmet from "helmet";
 import type { Pool } from "pg";
 import { authenticate, registerAuthRoutes, requireRole } from "./auth.js";
+import {
+  createSecurityEvent,
+  securityError,
+  type SecurityLogger,
+  writeSecurityEvent,
+} from "./security-monitoring.js";
 
 const orderStatuses = new Set(["processing", "shipped", "delivered"]);
 const stockFilters = new Set(["low", "in-stock"]);
@@ -77,6 +83,7 @@ type AppOptions = {
   isProduction?: boolean;
   operatorLoginEnabled?: boolean;
   rateLimitsEnabled?: boolean;
+  securityLogger?: SecurityLogger;
   secureCookies?: boolean;
   staticAssetsPath?: string;
   trustProxyHops?: number;
@@ -92,6 +99,8 @@ export function createApp(pool: Pool, options: AppOptions = {}) {
       : process.env.OPERATOR_LOGIN_ENABLED === "true"
   );
   const rateLimitsEnabled = options.rateLimitsEnabled ?? process.env.RATE_LIMITS_ENABLED !== "false";
+  const securityLogger = options.securityLogger
+    ?? (process.env.NODE_ENV === "test" ? () => undefined : writeSecurityEvent);
   const trustProxyHops = options.trustProxyHops
     ?? Number(process.env.TRUST_PROXY_HOPS ?? (isProduction ? 1 : 0));
   const webOrigin = options.webOrigin === false
@@ -117,46 +126,79 @@ export function createApp(pool: Pool, options: AppOptions = {}) {
 
   let authenticatedReadLimiter: express.RequestHandler = passThrough;
   let operationsReportLimiter: express.RequestHandler = passThrough;
+  const monitoredRateLimit = ({
+    identifier,
+    windowMs,
+    limit,
+    message,
+    skip,
+  }: {
+    identifier: string;
+    windowMs: number;
+    limit: number;
+    message: { message: string };
+    skip?: (request: express.Request) => boolean;
+  }) => rateLimit({
+    windowMs,
+    limit,
+    identifier,
+    skip,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message,
+    handler: (request, response, _next, rateLimitOptions) => {
+      const rateLimitInfo = (request as express.Request & { rateLimit?: { used: number } }).rateLimit;
+      if (!rateLimitInfo || rateLimitInfo.used === limit + 1) {
+        securityLogger(createSecurityEvent(request, {
+          severity: "warning",
+          event: "rate_limit.exceeded",
+          outcome: "blocked",
+          reason: "request_volume_exceeded",
+          actor: request.authUser
+            ? { userId: request.authUser.id, role: request.authUser.role }
+            : undefined,
+          control: {
+            name: identifier,
+            limit,
+            windowMs,
+            observedRequests: rateLimitInfo?.used,
+          },
+          statusCode: rateLimitOptions.statusCode,
+        }));
+      }
+      response.status(rateLimitOptions.statusCode).json(message);
+    },
+  });
   if (rateLimitsEnabled) {
-    app.use("/api", rateLimit({
+    app.use("/api", monitoredRateLimit({
       windowMs: 60 * 1000,
       limit: 300,
       identifier: "global-api",
-      standardHeaders: "draft-8",
-      legacyHeaders: false,
       message: { message: "Too many API requests. Please try again later." },
     }));
-    app.use("/api/auth/login", rateLimit({
+    app.use("/api/auth/login", monitoredRateLimit({
       windowMs: 15 * 60 * 1000,
       limit: 10,
       identifier: "sign-in",
-      standardHeaders: "draft-8",
-      legacyHeaders: false,
       message: { message: "Too many sign-in attempts. Please try again later." },
     }));
-    app.use("/api/health", rateLimit({
+    app.use("/api/health", monitoredRateLimit({
       windowMs: 60 * 1000,
       limit: 60,
       identifier: "health-check",
-      standardHeaders: "draft-8",
-      legacyHeaders: false,
       message: { message: "Too many health checks. Please try again later." },
     }));
-    authenticatedReadLimiter = rateLimit({
+    authenticatedReadLimiter = monitoredRateLimit({
       windowMs: 60 * 1000,
       limit: 120,
       identifier: "authenticated-reads",
       skip: (request) => request.method !== "GET" && request.method !== "HEAD",
-      standardHeaders: "draft-8",
-      legacyHeaders: false,
       message: { message: "Too many data requests. Please try again later." },
     });
-    operationsReportLimiter = rateLimit({
+    operationsReportLimiter = monitoredRateLimit({
       windowMs: 60 * 1000,
       limit: 30,
       identifier: "operations-report",
-      standardHeaders: "draft-8",
-      legacyHeaders: false,
       message: { message: "Too many report requests. Please try again later." },
     });
   }
@@ -173,25 +215,34 @@ export function createApp(pool: Pool, options: AppOptions = {}) {
     options.secureCookies ?? process.env.COOKIE_SECURE === "true",
     operatorLoginEnabled,
     authenticatedReadLimiter,
+    securityLogger,
   );
-  if (options.authRequired !== false) app.use("/api", authenticate(pool));
+  if (options.authRequired !== false) app.use("/api", authenticate(pool, securityLogger));
   app.use("/api", authenticatedReadLimiter);
   const operatorOnly: express.RequestHandler = options.authRequired === false
     ? (_request, _response, next) => next()
     : operatorLoginEnabled
-      ? requireRole("operator")
-      : (_request, response) => {
+      ? requireRole("operator", securityLogger)
+      : (request, response) => {
+          securityLogger(createSecurityEvent(request, {
+            severity: "warning",
+            event: "authorization.operator_mutation_blocked",
+            outcome: "blocked",
+            reason: "operator_mutations_disabled",
+            actor: request.authUser
+              ? { userId: request.authUser.id, role: request.authUser.role }
+              : undefined,
+            statusCode: 403,
+          }));
           response.status(403).json({ message: "Order changes are disabled in the public demo" });
         };
 
   if (rateLimitsEnabled) {
-    app.use("/api/orders", rateLimit({
+    app.use("/api/orders", monitoredRateLimit({
       windowMs: 60 * 1000,
       limit: 30,
       identifier: "order-mutations",
       skip: (request) => request.method !== "POST" && request.method !== "PATCH",
-      standardHeaders: "draft-8",
-      legacyHeaders: false,
       message: { message: "Too many order changes. Please try again later." },
     }));
   }
@@ -332,8 +383,18 @@ export function createApp(pool: Pool, options: AppOptions = {}) {
     });
   }
 
-  app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
-    console.error(error);
+  app.use((error: unknown, request: express.Request, response: express.Response, _next: express.NextFunction) => {
+    securityLogger(createSecurityEvent(request, {
+      severity: "error",
+      event: "application.unexpected_error",
+      outcome: "error",
+      reason: "unhandled_request_error",
+      actor: request.authUser
+        ? { userId: request.authUser.id, role: request.authUser.role }
+        : undefined,
+      error: securityError(error),
+      statusCode: 500,
+    }));
     response.status(500).json({ message: "Unexpected server error" });
   });
   return app;
