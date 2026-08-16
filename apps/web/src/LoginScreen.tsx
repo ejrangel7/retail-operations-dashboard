@@ -24,7 +24,7 @@ export function LoginScreen({ submitting, error, onSubmit }: Props) {
         }}>
           <label>Email
             <input type="email" autoComplete="username" value={email}
-              onChange={(event) => setEmail(event.target.value)} placeholder="viewer@retail.local" required />
+              onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" required />
           </label>
           <label>Password
             <input type="password" autoComplete="current-password" value={password}
@@ -34,9 +34,6 @@ export function LoginScreen({ submitting, error, onSubmit }: Props) {
             {submitting ? "Signing in..." : "Sign in"}
           </button>
         </form>
-        <div className="demo-accounts" aria-label="Demo accounts">
-          <p><strong>Viewer</strong><span>viewer@retail.local / RetailView!2026</span></p>
-        </div>
         <p className="login-disclaimer">Operator access is restricted to local development.</p>
       </section>
     </main>
