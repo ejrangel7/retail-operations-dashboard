@@ -53,9 +53,13 @@ React + TypeScript frontend
   │  REST/JSON
   ▼
 Express + TypeScript API
-  │  SQL
+  │  SQL through restricted runtime role
   ▼
 PostgreSQL
+
+Versioned migration command
+  │  DDL through migration-owner connection
+  └───────────────────────────────► PostgreSQL
 ```
 
 ## Run with Docker
@@ -69,6 +73,8 @@ PostgreSQL
 ```bash
 docker compose up --build
 ```
+
+Compose first runs a one-shot `database-setup` service. It applies pending versioned migrations, loads the idempotent fictional seeds, creates the local-only runtime role, and grants that role only the permissions used by the API. The long-running API process does not execute migrations or seeds.
 
 Then open:
 
@@ -101,7 +107,9 @@ docker compose down
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
-pnpm dev
+docker compose up -d database
+docker compose run --rm database-setup
+DATABASE_URL="postgresql://retail_app:retail_app@localhost:5432/retail_ops" pnpm dev
 ```
 
 The frontend runs on `http://localhost:5173` and the API on `http://localhost:4000`.
@@ -139,7 +147,7 @@ retail-operations-dashboard/
 ├── apps/
 │   ├── api/          # Express REST API
 │   └── web/          # React dashboard
-├── database/         # Production-safe schema/demo data and local-only operator seed
+├── database/         # Versioned migrations, demo seeds, and local-only database setup
 ├── docs/images/      # README product screenshots
 ├── e2e/              # Playwright browser tests
 ├── scripts/          # Repeatable maintenance scripts
@@ -174,7 +182,7 @@ Dashboard, product, order, and current-user endpoints require an active session.
 - Helmet sets production security headers including CSP, HSTS, MIME-sniffing protection, and frame restrictions; Express does not expose `X-Powered-By`.
 - Layered rate limits protect the complete API, sign-in, public health checks, authenticated reads, reports, and order mutations.
 - Security-relevant authentication, authorization, rate-limit, and server-error events are emitted as structured JSON without raw credentials, cookies, tokens, email addresses, client addresses, query strings, or exception messages.
-- Production initialization removes the known local operator account, and the production image does not contain its credential seed.
+- The baseline migration removes the known local operator account, and the production image does not contain its credential seed.
 - The public deployment also disables operator sign-in and all order mutations as a second defensive layer.
 - Local Docker uses HTTP and therefore sets `COOKIE_SECURE=false`; an HTTPS deployment must set `COOKIE_SECURE=true`.
 - This portfolio implementation does not include account recovery, MFA, or an external identity provider.
@@ -226,6 +234,7 @@ Production changes follow this path:
 
 ```text
 Pull request -> GitHub Actions (`pnpm verify` + Docker build)
+             -> run reviewed pending migrations, when present
              -> merge to `main`
              -> checks pass on `main`
              -> Render deploy
@@ -236,13 +245,42 @@ Render supplies its external URL to the application at runtime. Production also 
 
 See [the deployment and cost evaluation](docs/deployment-evaluation.md) for the current production status, provider limitations, verification procedure, and cost guardrails.
 
+### Database migrations and least privilege
+
+Database changes live in `database/migrations` and use immutable, ordered filenames such as `001_baseline.sql`. The migration runner records each filename and SHA-256 checksum in `schema_migrations`, serializes concurrent runners with a PostgreSQL advisory lock, and rejects a migration that was modified after application.
+
+The credentials are intentionally separated:
+
+- `MIGRATION_DATABASE_URL` belongs to the database owner and is used only by explicit maintenance commands.
+- `DATABASE_URL` belongs to the application runtime role. Production grants it `SELECT` on business and authentication data plus the session permissions required for login and logout. It receives no schema-changing permissions and no order-write permissions in the public viewer deployment.
+
+Run maintenance commands only from a trusted terminal and never commit either connection string:
+
+```bash
+MIGRATION_DATABASE_URL="<owner connection string>" pnpm db:migrate
+MIGRATION_DATABASE_URL="<owner connection string>" pnpm db:seed:demo
+MIGRATION_DATABASE_URL="<owner connection string>" \
+DATABASE_RUNTIME_ROLE="retail_runtime" \
+pnpm db:grant-runtime
+```
+
+For Neon, create `retail_runtime` with SQL rather than the Console, CLI, or API. Neon grants Console-created roles membership in `neon_superuser`, whereas a role created using SQL starts with normal PostgreSQL privileges:
+
+```sql
+CREATE ROLE retail_runtime LOGIN PASSWORD '<generated unique password>';
+```
+
+After migrations and grants succeed, select that role in Neon's connection dialog, copy its pooled TLS connection string, and configure it as Render's `DATABASE_URL`. Keep the owner connection string outside Render because the web process does not need it.
+
+Render's pre-deploy command is unavailable to Free web services. To preserve the zero-cost guardrail, migrations therefore remain an explicit release step instead of being placed back into the web startup command. Migration files must remain backward-compatible until the corresponding application deployment is live.
+
 ### Validate the production image locally
 
 ```bash
 docker build -t retail-operations-dashboard:production .
 ```
 
-The container listens on port `10000`, serves the dashboard and API from the same origin, and initializes the idempotent fictional schema from `database/init.sql`. That production-safe script deletes any legacy `operator@retail.local` account and seeds only the public viewer. Docker Compose uses the separate `database/local-operator.sql` file after the base initialization so local create/update workflows remain available.
+The container listens on port `10000` and serves the dashboard and API from the same origin. It packages the migration command and production-safe demo seed for explicit maintenance, but normal startup only launches the API. Docker Compose keeps the known local operator credential in `database/local/operator.sql`, which is copied exclusively into the development image.
 
 ### Verify production
 

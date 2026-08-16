@@ -34,19 +34,20 @@ RUN pnpm install --frozen-lockfile --prod --filter @retail-ops/api
 
 FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS api-runtime
 WORKDIR /app/apps/api
-ENV NODE_ENV=production PORT=4000 DATABASE_INIT_PATH=/app/database/init.sql
+ENV NODE_ENV=production PORT=4000
 COPY --from=production-dependencies --chown=node:node /workspace/node_modules /app/node_modules
 COPY --from=production-dependencies --chown=node:node /workspace/apps/api/node_modules ./node_modules
 COPY --chown=node:node apps/api/package.json ./package.json
 COPY --from=api-build --chown=node:node /workspace/apps/api/dist ./dist
-COPY --chown=node:node database/init.sql /app/database/init.sql
+COPY --chown=node:node database/migrations /app/database/migrations
+COPY --chown=node:node database/seeds/demo.sql /app/database/seeds/demo.sql
 USER node
 EXPOSE 4000
 CMD ["node", "dist/server.js"]
 
 FROM api-runtime AS api-development
-ENV NODE_ENV=development DATABASE_DEVELOPMENT_SEED_PATH=/app/database/local-operator.sql
-COPY --chown=node:node database/local-operator.sql /app/database/local-operator.sql
+ENV NODE_ENV=development
+COPY --chown=node:node database/local /app/database/local
 
 FROM api-runtime AS runtime
 ENV PORT=10000 STATIC_ASSETS_PATH=/app/public

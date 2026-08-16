@@ -1,6 +1,6 @@
 # Production deployment and zero-cost evaluation
 
-_Last reviewed: August 11, 2026._
+_Last reviewed: August 16, 2026._
 
 ## Current status
 
@@ -20,7 +20,9 @@ The checked-in `render.yaml` is the reproducible Blueprint specification and the
 
 The production image compiles React with `VITE_API_URL=/api`, serves the static application from Express, and exposes the API from the same origin. A single process avoids operating separate frontend and API services and keeps session cookies same-origin.
 
-On startup, the container executes the idempotent `database/init.sql` file. This creates the schema and fictional demo records when the database is empty, safely rechecks them after a cold start, deletes any legacy known operator account, and seeds only the public viewer. The separate local operator credential seed is copied only into the Docker Compose development target. Test files that exercise the known local credentials are also excluded from the compiled production artifact.
+The web container starts only the Express process and never executes schema or seed SQL. Versioned migrations run through an explicit owner-only command and are tracked by filename and checksum in PostgreSQL. Docker Compose models this separation with a one-shot `database-setup` service before the API starts. The local operator credential remains exclusive to the development image, and test files that exercise it remain excluded from the compiled production artifact.
+
+Production uses two security boundaries: an owner connection for explicit migrations and a restricted runtime connection for the web process. The runtime role can read dashboard data and maintain login sessions but receives neither DDL privileges nor order mutation privileges. Render stores only the restricted `DATABASE_URL`; the owner-only `MIGRATION_DATABASE_URL` must remain outside the web service.
 
 The root `render.yaml` declares:
 
@@ -38,10 +40,12 @@ The root `render.yaml` declares:
 
 1. Open a pull request against `main`.
 2. GitHub Actions runs `pnpm verify` and builds the production Docker image.
-3. Review and merge only after the pull-request check passes.
-4. GitHub Actions repeats the validation for the resulting `main` commit.
-5. Render deploys after the `main` check passes and accepts the release only when `/api/health` succeeds.
-6. Run the production verification checklist below.
+3. Review the PR after its checks pass, but do not merge a database-changing release yet.
+4. If the PR contains a new migration, apply that reviewed backward-compatible migration from a trusted terminal with the owner connection.
+5. Merge the PR after the migration succeeds.
+6. GitHub Actions repeats the validation for the resulting `main` commit.
+7. Render deploys after the `main` check passes and accepts the release only when `/api/health` succeeds.
+8. Run the production verification checklist below.
 
 This repeats the same repository-owned verification locally and in CI; it does not maintain separate validation logic.
 
@@ -53,9 +57,12 @@ Render documents 750 free instance hours per workspace each calendar month. A fr
 
 Render Free is explicitly intended for hobby projects and previews, not production workloads with availability requirements.
 
+Render documents pre-deploy commands as a paid-web-service feature. This Free deployment therefore keeps migrations as an explicit release command instead of coupling them to web-process startup. No additional Render service or paid feature is required.
+
 Official sources:
 
 - [Render free services and limits](https://render.com/docs/free)
+- [Render deploy lifecycle and pre-deploy availability](https://render.com/docs/deploys)
 - [Render Docker deployments](https://render.com/docs/docker)
 - [Render Blueprint specification](https://render.com/docs/blueprint-spec)
 - [Render health checks](https://render.com/docs/health-checks)
@@ -67,6 +74,7 @@ Neon lists its Free plan at $0 with no credit card required, 100 compute-unit ho
 Official sources:
 
 - [Neon pricing](https://neon.com/pricing)
+- [Neon PostgreSQL role compatibility](https://neon.com/docs/reference/compatibility)
 - [Neon connection security](https://neon.com/docs/security/security-overview)
 - [Neon connection guidance](https://neon.com/docs/connect/connection-errors)
 
@@ -99,12 +107,13 @@ Official alternative references:
 ## Production verification checklist
 
 1. Confirm the GitHub Actions run for the merged `main` commit succeeded.
-2. Confirm `GET https://retail-operations-dashboard.onrender.com/api/health` returns HTTP 200 and `{"status":"ok"}`.
-3. Confirm the response includes production security headers such as CSP, HSTS, `X-Content-Type-Options`, and `X-Frame-Options`, without `X-Powered-By`.
-4. Confirm the viewer can sign in, read dashboard data, filter and paginate collections, view charts, and export CSV.
-5. Confirm the known local operator credentials receive HTTP 401 in production and order mutations remain blocked.
-6. Confirm blocked authentication or rate-limit activity appears as JSON with `"category":"security"` and does not expose raw credentials, tokens, email addresses, or client addresses.
-7. Confirm no real customer, order, credential, or financial data was introduced.
+2. For a database-changing release, confirm the reviewed migration completed before the merge and appears in `schema_migrations`.
+3. Confirm `GET https://retail-operations-dashboard.onrender.com/api/health` returns HTTP 200 and `{"status":"ok"}`.
+4. Confirm the response includes production security headers such as CSP, HSTS, `X-Content-Type-Options`, and `X-Frame-Options`, without `X-Powered-By`.
+5. Confirm the viewer can sign in, read dashboard data, filter and paginate collections, view charts, and export CSV.
+6. Confirm the known local operator credentials receive HTTP 401 in production and order mutations remain blocked.
+7. Confirm blocked authentication or rate-limit activity appears as JSON with `"category":"security"` and does not expose raw credentials, tokens, email addresses, or client addresses.
+8. Confirm no real customer, order, credential, or financial data was introduced.
 
 ## Changes requiring explicit authorization
 
@@ -130,7 +139,7 @@ Run it against an accessible PostgreSQL database:
 
 ```bash
 docker run --rm -p 10000:10000 \
-  -e DATABASE_URL="postgresql://user:password@host/database" \
+  -e DATABASE_URL="postgresql://restricted-user:password@host/database" \
   -e COOKIE_SECURE=false \
   retail-operations-dashboard:production
 ```

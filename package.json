@@ -7,6 +7,9 @@
   },
   "scripts": {
     "dev": "pnpm --parallel --filter ./apps/* dev",
+    "db:migrate": "pnpm --filter @retail-ops/api db:migrate",
+    "db:seed:demo": "pnpm --filter @retail-ops/api db:seed:demo",
+    "db:grant-runtime": "pnpm --filter @retail-ops/api db:grant-runtime",
     "build": "pnpm --recursive build",
     "test": "pnpm --recursive test",
     "typecheck": "pnpm --recursive typecheck",
