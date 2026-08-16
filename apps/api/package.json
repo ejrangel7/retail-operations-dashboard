@@ -1,6 +1,6 @@
 {
   "name": "@retail-ops/api",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,8 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "test": "vitest run src",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "coverage": "vitest run --coverage --coverage.thresholds.lines=80 --coverage.thresholds.functions=80 --coverage.thresholds.branches=80 --coverage.thresholds.statements=75 src"
   },
   "dependencies": {
     "cors": "^2.8.5",

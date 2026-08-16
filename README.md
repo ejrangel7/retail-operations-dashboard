@@ -38,7 +38,7 @@ The authenticated overview presents operational KPIs, fulfillment activity, inve
 - **Frontend:** React, TypeScript, Vite, responsive CSS
 - **Backend:** Node.js, Express, TypeScript
 - **Database:** PostgreSQL
-- **Infrastructure:** Docker, Docker Compose, Nginx
+- **Infrastructure:** Docker, Docker Compose, Nginx for the local web container, and Express static delivery in production
 - **Package management:** pnpm workspaces
 - **Testing:** Vitest, Testing Library, Playwright
 - **CI/CD:** GitHub Actions, Render
@@ -124,6 +124,17 @@ pnpm test:e2e
 ```
 
 Playwright reuses an existing application at `http://localhost:8080` or starts `docker compose up --build` and waits for it automatically. GitHub Actions runs the Chromium project after typecheck, unit tests, builds, and the production-image build pass.
+
+The `test:e2e` command stops the Compose services after the suite finishes, including after a failure. It preserves the named PostgreSQL volume; use `docker compose down --volumes` only when you intentionally want to delete local data.
+
+### Automated quality checks
+
+`pnpm verify` runs ESLint, TypeScript, coverage-enforced unit tests, and both production builds. The API must maintain at least 80% line, function, and branch coverage plus 75% statement coverage; the frontend must remain at or above 80% for all four metrics.
+
+```bash
+pnpm verify
+pnpm coverage
+```
 
 ### Supply-chain controls
 
@@ -248,6 +259,8 @@ See [the deployment and cost evaluation](docs/deployment-evaluation.md) for the 
 ### Database migrations and least privilege
 
 Database changes live in `database/migrations` and use immutable, ordered filenames such as `001_baseline.sql`. The migration runner records each filename and SHA-256 checksum in `schema_migrations`, serializes concurrent runners with a PostgreSQL advisory lock, and rejects a migration that was modified after application.
+
+Migration `002_business-data-constraints.sql` adds database-level checks for valid order statuses and nonnegative prices, inventory, reorder levels, and order totals. These constraints protect integrity even when data bypasses the HTTP API.
 
 The credentials are intentionally separated:
 
