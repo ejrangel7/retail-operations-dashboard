@@ -131,7 +131,7 @@ retail-operations-dashboard/
 ├── apps/
 │   ├── api/          # Express REST API
 │   └── web/          # React dashboard
-├── database/         # PostgreSQL schema and demo seed data
+├── database/         # Production-safe schema/demo data and local-only operator seed
 ├── docs/images/      # README product screenshots
 ├── e2e/              # Playwright browser tests
 ├── scripts/          # Repeatable maintenance scripts
@@ -165,7 +165,8 @@ Dashboard, product, order, and current-user endpoints require an active session.
 - CORS allows credentials only for `WEB_ORIGIN`, Render's own external URL, or the local frontend origin during development.
 - Helmet sets production security headers including CSP, HSTS, MIME-sniffing protection, and frame restrictions; Express does not expose `X-Powered-By`.
 - Layered rate limits protect the complete API, sign-in, public health checks, authenticated reads, reports, and order mutations.
-- The public deployment disables operator sign-in and all order mutations, including sessions created previously.
+- Production initialization removes the known local operator account, and the production image does not contain its credential seed.
+- The public deployment also disables operator sign-in and all order mutations as a second defensive layer.
 - Local Docker uses HTTP and therefore sets `COOKIE_SECURE=false`; an HTTPS deployment must set `COOKIE_SECURE=true`.
 - This portfolio implementation does not include account recovery, MFA, or an external identity provider.
 
@@ -195,7 +196,7 @@ Order numbers must use the exact format `BT-0000`: the uppercase prefix `BT-` fo
 
 ## Production deployment
 
-The dashboard is deployed at [retail-operations-dashboard.onrender.com](https://retail-operations-dashboard.onrender.com) using a Render Free web service and a Neon Free PostgreSQL database. The root production `Dockerfile` installs the pnpm workspace from the committed lockfile, packages React and Express into one same-origin service, and runs Node as the non-privileged `node` user. `render.yaml` records the reproducible Render configuration, fixes the instance to the Free plan, and keeps `DATABASE_URL` out of version control.
+The dashboard is deployed at [retail-operations-dashboard.onrender.com](https://retail-operations-dashboard.onrender.com) using a Render Free web service and a Neon Free PostgreSQL database. The root production `Dockerfile` installs the pnpm workspace from the committed lockfile, packages React and Express into one same-origin service, excludes test files and the local operator credential seed from the runtime image, and runs Node as the non-privileged `node` user. `render.yaml` records the reproducible Render configuration, fixes the instance to the Free plan, and keeps `DATABASE_URL` out of version control.
 
 Production changes follow this path:
 
@@ -217,7 +218,7 @@ See [the deployment and cost evaluation](docs/deployment-evaluation.md) for the 
 docker build -t retail-operations-dashboard:production .
 ```
 
-The container listens on port `10000`, serves the dashboard and API from the same origin, and initializes the idempotent fictional schema from `database/init.sql`.
+The container listens on port `10000`, serves the dashboard and API from the same origin, and initializes the idempotent fictional schema from `database/init.sql`. That production-safe script deletes any legacy `operator@retail.local` account and seeds only the public viewer. Docker Compose uses the separate `database/local-operator.sql` file after the base initialization so local create/update workflows remain available.
 
 ### Verify production
 

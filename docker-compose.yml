@@ -9,7 +9,8 @@ services:
       - "5432:5432"
     volumes:
       - retail_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./database/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - ./database/local-operator.sql:/docker-entrypoint-initdb.d/20-local-operator.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U retail -d retail_ops"]
       interval: 5s
@@ -19,7 +20,7 @@ services:
   api:
     build:
       context: .
-      target: api-runtime
+      target: api-development
     environment:
       DATABASE_URL: postgresql://retail:retail@database:5432/retail_ops
       PORT: 4000
@@ -45,4 +46,3 @@ services:
 
 volumes:
   retail_data:
-

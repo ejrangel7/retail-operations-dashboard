@@ -18,7 +18,7 @@ The checked-in `render.yaml` is the reproducible Blueprint specification and the
 
 The production image compiles React with `VITE_API_URL=/api`, serves the static application from Express, and exposes the API from the same origin. A single process avoids operating separate frontend and API services and keeps session cookies same-origin.
 
-On startup, the container executes the idempotent `database/init.sql` file. This creates the schema and fictional demo records when the database is empty and safely rechecks them after a cold start.
+On startup, the container executes the idempotent `database/init.sql` file. This creates the schema and fictional demo records when the database is empty, safely rechecks them after a cold start, deletes any legacy known operator account, and seeds only the public viewer. The separate local operator credential seed is copied only into the Docker Compose development target. Test files that exercise the known local credentials are also excluded from the compiled production artifact.
 
 The root `render.yaml` declares:
 
@@ -28,7 +28,8 @@ The root `render.yaml` declares:
 - `/api/health` as the health check
 - `DATABASE_URL` as an unversioned secret
 - secure cookies for Render HTTPS
-- disabled operator login for the public demo
+- no known operator credential in the production seed or image
+- disabled operator login for the public demo as a second defensive layer
 - one trusted proxy hop for Render
 
 ## Deployment flow
@@ -99,7 +100,7 @@ Official alternative references:
 2. Confirm `GET https://retail-operations-dashboard.onrender.com/api/health` returns HTTP 200 and `{"status":"ok"}`.
 3. Confirm the response includes production security headers such as CSP, HSTS, `X-Content-Type-Options`, and `X-Frame-Options`, without `X-Powered-By`.
 4. Confirm the viewer can sign in, read dashboard data, filter and paginate collections, view charts, and export CSV.
-5. Confirm operator sign-in and order mutations remain blocked in the public demo.
+5. Confirm the known local operator credentials receive HTTP 401 in production and order mutations remain blocked.
 6. Confirm no real customer, order, credential, or financial data was introduced.
 
 ## Changes requiring explicit authorization
