@@ -194,6 +194,30 @@ describe("authentication and authorization", () => {
     expect(vi.mocked(pool.query).mock.calls[0][0]).toContain("sessions.expires_at > NOW()");
   });
 
+  it("rate-limits authenticated reads by client address", async () => {
+    const pool = {
+      query: vi.fn().mockResolvedValue({ rows: [viewer] }),
+    } as unknown as Pool;
+    const app = createApp(pool, { rateLimitsEnabled: true, trustProxyHops: 1 });
+
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      const response = await request(app)
+        .get("/api/auth/me")
+        .set("Cookie", "retail_session=viewer-token")
+        .set("X-Forwarded-For", "203.0.113.12");
+      expect(response.status).toBe(200);
+    }
+
+    const limited = await request(app)
+      .get("/api/auth/me")
+      .set("Cookie", "retail_session=viewer-token")
+      .set("X-Forwarded-For", "203.0.113.12");
+    expect(limited.status).toBe(429);
+    expect(limited.body).toEqual({ message: "Too many data requests. Please try again later." });
+    expect(limited.headers["ratelimit"]).toContain("authenticated-reads");
+    expect(vi.mocked(pool.query)).toHaveBeenCalledTimes(121);
+  });
+
   it("protects operational data when no session is present", async () => {
     const pool = poolWithRows();
     const response = await request(createApp(pool)).get("/api/dashboard");

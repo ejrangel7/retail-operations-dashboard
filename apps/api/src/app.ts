@@ -7,6 +7,7 @@ import { authenticate, registerAuthRoutes, requireRole } from "./auth.js";
 
 const orderStatuses = new Set(["processing", "shipped", "delivered"]);
 const stockFilters = new Set(["low", "in-stock"]);
+const passThrough: express.RequestHandler = (_request, _response, next) => next();
 
 type ParsedQuery = { page: number; pageSize: number; search: string };
 type CreateOrderInput = {
@@ -113,17 +114,53 @@ export function createApp(pool: Pool, options: AppOptions = {}) {
       credentials: true,
     }));
   }
-  app.use(express.json());
 
+  let authenticatedReadLimiter: express.RequestHandler = passThrough;
+  let operationsReportLimiter: express.RequestHandler = passThrough;
   if (rateLimitsEnabled) {
+    app.use("/api", rateLimit({
+      windowMs: 60 * 1000,
+      limit: 300,
+      identifier: "global-api",
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      message: { message: "Too many API requests. Please try again later." },
+    }));
     app.use("/api/auth/login", rateLimit({
       windowMs: 15 * 60 * 1000,
       limit: 10,
+      identifier: "sign-in",
       standardHeaders: "draft-8",
       legacyHeaders: false,
       message: { message: "Too many sign-in attempts. Please try again later." },
     }));
+    app.use("/api/health", rateLimit({
+      windowMs: 60 * 1000,
+      limit: 60,
+      identifier: "health-check",
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      message: { message: "Too many health checks. Please try again later." },
+    }));
+    authenticatedReadLimiter = rateLimit({
+      windowMs: 60 * 1000,
+      limit: 120,
+      identifier: "authenticated-reads",
+      skip: (request) => request.method !== "GET" && request.method !== "HEAD",
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      message: { message: "Too many data requests. Please try again later." },
+    });
+    operationsReportLimiter = rateLimit({
+      windowMs: 60 * 1000,
+      limit: 30,
+      identifier: "operations-report",
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      message: { message: "Too many report requests. Please try again later." },
+    });
   }
+  app.use(express.json());
 
   app.get("/api/health", async (_request, response) => {
     const result = await pool.query<{ now: string }>("SELECT NOW() AS now");
@@ -135,8 +172,10 @@ export function createApp(pool: Pool, options: AppOptions = {}) {
     pool,
     options.secureCookies ?? process.env.COOKIE_SECURE === "true",
     operatorLoginEnabled,
+    authenticatedReadLimiter,
   );
   if (options.authRequired !== false) app.use("/api", authenticate(pool));
+  app.use("/api", authenticatedReadLimiter);
   const operatorOnly: express.RequestHandler = options.authRequired === false
     ? (_request, _response, next) => next()
     : operatorLoginEnabled
@@ -149,6 +188,7 @@ export function createApp(pool: Pool, options: AppOptions = {}) {
     app.use("/api/orders", rateLimit({
       windowMs: 60 * 1000,
       limit: 30,
+      identifier: "order-mutations",
       skip: (request) => request.method !== "POST" && request.method !== "PATCH",
       standardHeaders: "draft-8",
       legacyHeaders: false,
@@ -171,7 +211,7 @@ export function createApp(pool: Pool, options: AppOptions = {}) {
     });
   });
 
-  app.get("/api/reports/operations", async (_request, response) => {
+  app.get("/api/reports/operations", operationsReportLimiter, async (_request, response) => {
     const [orderStatus, inventoryByCategory] = await Promise.all([
       pool.query(
         `WITH statuses (status, position) AS (

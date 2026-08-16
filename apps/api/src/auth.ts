@@ -104,6 +104,7 @@ export function registerAuthRoutes(
   pool: Pool,
   secureCookies: boolean,
   operatorLoginEnabled = true,
+  authenticatedReadLimiter: RequestHandler = (_request, _response, next) => next(),
 ) {
   app.post("/api/auth/login", async (request, response) => {
     const email = typeof request.body?.email === "string" ? request.body.email.trim().toLowerCase() : "";
@@ -141,7 +142,7 @@ export function registerAuthRoutes(
     response.json({ id: user.id, email: user.email, displayName: user.displayName, role: user.role });
   });
 
-  app.get("/api/auth/me", authenticate(pool), (request, response) => {
+  app.get("/api/auth/me", authenticate(pool), authenticatedReadLimiter, (request, response) => {
     response.json(request.authUser);
   });
 

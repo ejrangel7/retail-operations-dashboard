@@ -164,10 +164,23 @@ Dashboard, product, order, and current-user endpoints require an active session.
 - Sessions expire after eight hours, concurrent sessions remain independent, and sign-in removes only expired sessions; logout revokes the current session server-side.
 - CORS allows credentials only for `WEB_ORIGIN`, Render's own external URL, or the local frontend origin during development.
 - Helmet sets production security headers including CSP, HSTS, MIME-sniffing protection, and frame restrictions; Express does not expose `X-Powered-By`.
-- Every sign-in attempt, successful or failed, counts toward the limit of 10 attempts per client address every 15 minutes; order mutations are limited separately.
+- Layered rate limits protect the complete API, sign-in, public health checks, authenticated reads, reports, and order mutations.
 - The public deployment disables operator sign-in and all order mutations, including sessions created previously.
 - Local Docker uses HTTP and therefore sets `COOKIE_SECURE=false`; an HTTPS deployment must set `COOKIE_SECURE=true`.
 - This portfolio implementation does not include account recovery, MFA, or an external identity provider.
+
+### Rate limiting policy
+
+| Scope | Limit per client address |
+| --- | --- |
+| All `/api` requests | 300 per minute |
+| Public `/api/health` checks | 60 per minute |
+| Sign-in attempts, successful or failed | 10 every 15 minutes |
+| Authenticated `GET` and `HEAD` requests | 120 per minute |
+| Operations report requests | 30 per minute |
+| Order creation and status changes | 30 per minute |
+
+Applicable limits are cumulative: an authenticated report request consumes the global, authenticated-read, and report counters. Responses expose standard draft-8 `RateLimit` headers. Render traffic is attributed to the originating client through the configured trusted proxy hop. Counters currently use the process-local memory store, which is appropriate for the single free Render instance but resets whenever the process restarts and is not shared across multiple instances.
 
 ### Order number convention
 
@@ -242,4 +255,3 @@ This project is licensed under the [MIT License](LICENSE). It may be used, copie
 ## Author
 
 [Edward Rangel](https://github.com/ejrangel7) — Senior Full Stack Software Engineer
-
