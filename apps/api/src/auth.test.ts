@@ -42,6 +42,9 @@ describe("authentication and authorization", () => {
     expect(response.headers["set-cookie"][0]).not.toContain("Secure");
     expect(vi.mocked(pool.query).mock.calls[0][1]).toEqual(["operator@retail.local"]);
     expect(vi.mocked(pool.query)).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(pool.query).mock.calls[1]).toEqual([
+      "DELETE FROM sessions WHERE expires_at <= NOW()",
+    ]);
   });
 
   it("rejects invalid credentials without creating a session", async () => {
@@ -147,6 +150,37 @@ describe("authentication and authorization", () => {
     expect(limited.body).toEqual({ message: "Too many sign-in attempts. Please try again later." });
     expect(limited.headers).toHaveProperty("ratelimit");
     expect(pool.query).not.toHaveBeenCalled();
+  });
+
+  it("rate-limits repeated successful sign-in attempts", async () => {
+    const salt = "abcdef0123456789abcdef0123456789";
+    const passwordHash = scryptSync("RetailView!2026", salt, 64).toString("hex");
+    const pool = {
+      query: vi.fn().mockImplementation((query: string) => Promise.resolve({
+        rows: query.includes("FROM users")
+          ? [{ ...viewer, passwordSalt: salt, passwordHash }]
+          : [],
+      })),
+    } as unknown as Pool;
+    const app = createApp(pool, { rateLimitsEnabled: true, trustProxyHops: 1 });
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const response = await request(app)
+        .post("/api/auth/login")
+        .set("X-Forwarded-For", "203.0.113.11")
+        .send({ email: viewer.email, password: "RetailView!2026" });
+      expect(response.status).toBe(200);
+    }
+
+    const limited = await request(app)
+      .post("/api/auth/login")
+      .set("X-Forwarded-For", "203.0.113.11")
+      .send({ email: viewer.email, password: "RetailView!2026" });
+
+    expect(limited.status).toBe(429);
+    expect(limited.body).toEqual({ message: "Too many sign-in attempts. Please try again later." });
+    expect(limited.headers).toHaveProperty("ratelimit");
+    expect(vi.mocked(pool.query)).toHaveBeenCalledTimes(30);
   });
 
   it("returns the current user for an active session", async () => {

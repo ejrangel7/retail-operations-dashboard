@@ -161,10 +161,10 @@ Dashboard, product, order, and current-user endpoints require an active session.
 
 - Passwords are stored as salted `scrypt` hashes; plaintext passwords are never stored.
 - Session tokens are random, returned only in an `HttpOnly` and `SameSite=Lax` cookie, and stored in PostgreSQL only as SHA-256 hashes.
-- Sessions expire after eight hours and are revoked server-side on logout.
+- Sessions expire after eight hours, concurrent sessions remain independent, and sign-in removes only expired sessions; logout revokes the current session server-side.
 - CORS allows credentials only for `WEB_ORIGIN`, Render's own external URL, or the local frontend origin during development.
 - Helmet sets production security headers including CSP, HSTS, MIME-sniffing protection, and frame restrictions; Express does not expose `X-Powered-By`.
-- Login attempts and order mutations are rate-limited.
+- Every sign-in attempt, successful or failed, counts toward the limit of 10 attempts per client address every 15 minutes; order mutations are limited separately.
 - The public deployment disables operator sign-in and all order mutations, including sessions created previously.
 - Local Docker uses HTTP and therefore sets `COOKIE_SECURE=false`; an HTTPS deployment must set `COOKIE_SECURE=true`.
 - This portfolio implementation does not include account recovery, MFA, or an external identity provider.
