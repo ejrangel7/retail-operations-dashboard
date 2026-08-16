@@ -30,6 +30,47 @@ describe("Retail Operations API", () => {
     expect(response.headers).not.toHaveProperty("x-powered-by");
   });
 
+  it("rate-limits public database health checks", async () => {
+    const now = "2026-08-07T12:00:00.000Z";
+    const pool = poolWithRows(...Array.from({ length: 60 }, () => [{ now }]));
+    const app = createApp(pool, { authRequired: false, rateLimitsEnabled: true, trustProxyHops: 1 });
+
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      const response = await request(app)
+        .get("/api/health")
+        .set("X-Forwarded-For", "203.0.113.20");
+      expect(response.status).toBe(200);
+    }
+
+    const limited = await request(app)
+      .get("/api/health")
+      .set("X-Forwarded-For", "203.0.113.20");
+    expect(limited.status).toBe(429);
+    expect(limited.body).toEqual({ message: "Too many health checks. Please try again later." });
+    expect(limited.headers["ratelimit"]).toContain("health-check");
+    expect(vi.mocked(pool.query)).toHaveBeenCalledTimes(60);
+  });
+
+  it("applies a global limit before protected API work", async () => {
+    const pool = poolWithRows();
+    const app = createApp(pool, { rateLimitsEnabled: true, trustProxyHops: 1 });
+
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      const response = await request(app)
+        .get("/api/dashboard")
+        .set("X-Forwarded-For", "203.0.113.21");
+      expect(response.status).toBe(401);
+    }
+
+    const limited = await request(app)
+      .get("/api/dashboard")
+      .set("X-Forwarded-For", "203.0.113.21");
+    expect(limited.status).toBe(429);
+    expect(limited.body).toEqual({ message: "Too many API requests. Please try again later." });
+    expect(limited.headers["ratelimit"]).toContain("global-api");
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
   it("sets production security headers and allows Render's own origin", async () => {
     const origin = "https://retail-operations-dashboard.onrender.com";
     vi.stubEnv("RENDER_EXTERNAL_URL", origin);
@@ -97,6 +138,26 @@ describe("Retail Operations API", () => {
     expect(response.body).toEqual({ orderStatus, inventoryByCategory });
     expect(vi.mocked(pool.query).mock.calls[0][0]).toContain("WITH statuses");
     expect(vi.mocked(pool.query).mock.calls[1][0]).toContain("GROUP BY category");
+  });
+
+  it("rate-limits the operations report separately from other reads", async () => {
+    const pool = poolWithRows(...Array.from({ length: 60 }, () => []));
+    const app = createApp(pool, { authRequired: false, rateLimitsEnabled: true, trustProxyHops: 1 });
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const response = await request(app)
+        .get("/api/reports/operations")
+        .set("X-Forwarded-For", "203.0.113.22");
+      expect(response.status).toBe(200);
+    }
+
+    const limited = await request(app)
+      .get("/api/reports/operations")
+      .set("X-Forwarded-For", "203.0.113.22");
+    expect(limited.status).toBe(429);
+    expect(limited.body).toEqual({ message: "Too many report requests. Please try again later." });
+    expect(limited.headers["ratelimit"]).toContain("operations-report");
+    expect(vi.mocked(pool.query)).toHaveBeenCalledTimes(60);
   });
 
   it("filters and paginates orders with parameterized queries", async () => {
