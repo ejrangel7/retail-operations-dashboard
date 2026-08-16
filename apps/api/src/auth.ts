@@ -132,7 +132,7 @@ export function registerAuthRoutes(
 
     const token = randomBytes(32).toString("base64url");
     const hash = tokenHash(token);
-    await pool.query("DELETE FROM sessions WHERE expires_at <= NOW() OR user_id = $1", [user.id]);
+    await pool.query("DELETE FROM sessions WHERE expires_at <= NOW()");
     await pool.query(
       "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, NOW() + INTERVAL '8 hours')",
       [hash, user.id],
