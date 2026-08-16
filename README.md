@@ -173,6 +173,7 @@ Dashboard, product, order, and current-user endpoints require an active session.
 - CORS allows credentials only for `WEB_ORIGIN`, Render's own external URL, or the local frontend origin during development.
 - Helmet sets production security headers including CSP, HSTS, MIME-sniffing protection, and frame restrictions; Express does not expose `X-Powered-By`.
 - Layered rate limits protect the complete API, sign-in, public health checks, authenticated reads, reports, and order mutations.
+- Security-relevant authentication, authorization, rate-limit, and server-error events are emitted as structured JSON without raw credentials, cookies, tokens, email addresses, client addresses, query strings, or exception messages.
 - Production initialization removes the known local operator account, and the production image does not contain its credential seed.
 - The public deployment also disables operator sign-in and all order mutations as a second defensive layer.
 - Local Docker uses HTTP and therefore sets `COOKIE_SECURE=false`; an HTTPS deployment must set `COOKIE_SECURE=true`.
@@ -190,6 +191,21 @@ Dashboard, product, order, and current-user endpoints require an active session.
 | Order creation and status changes | 30 per minute |
 
 Applicable limits are cumulative: an authenticated report request consumes the global, authenticated-read, and report counters. Responses expose standard draft-8 `RateLimit` headers. Render traffic is attributed to the originating client through the configured trusted proxy hop. Counters currently use the process-local memory store, which is appropriate for the single free Render instance but resets whenever the process restarts and is not shared across multiple instances.
+
+### Security monitoring
+
+The API writes one-line JSON security events to the existing process output captured by Docker and Render. The event catalog covers:
+
+- invalid login payloads and credentials;
+- blocked attempts to use the local-only operator account or operator mutations in production;
+- invalid or expired session cookies;
+- role-based authorization denials;
+- the first rate-limit rejection for each client, limiter, and window, which signals abnormal request volume without creating an unbounded log stream;
+- unexpected request-processing errors, reduced to the error type and safe machine-readable code.
+
+Every event includes a timestamp, severity, outcome, HTTP status, method, path, and event-specific control metadata. Account and client identifiers use process-scoped HMAC fingerprints so related activity can be correlated during one runtime without retaining their raw values. The key and fingerprints change whenever the process restarts, matching the lifetime of the current in-memory rate-limit counters.
+
+Inspect local events with `docker compose logs api`. In production, use the existing Render service log view and filter for `"category":"security"`. This implementation does not add a paid monitoring service, persistent security-log archive, automated alert delivery, or cross-instance correlation. Enabling any paid observability product still requires explicit authorization.
 
 ### Order number convention
 

@@ -3,6 +3,12 @@ import { promisify } from "node:util";
 import type express from "express";
 import type { CookieOptions, RequestHandler } from "express";
 import type { Pool } from "pg";
+import {
+  createSecurityEvent,
+  securityFingerprint,
+  type SecurityLogger,
+  writeSecurityEvent,
+} from "./security-monitoring.js";
 
 const scrypt = promisify(scryptCallback);
 const sessionCookie = "retail_session";
@@ -61,7 +67,7 @@ async function passwordMatches(password: string, salt: string, expectedHash: str
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-export function authenticate(pool: Pool): RequestHandler {
+export function authenticate(pool: Pool, securityLogger: SecurityLogger = writeSecurityEvent): RequestHandler {
   return async (request, response, next) => {
     const token = readCookie(request, sessionCookie);
     if (!token) {
@@ -78,6 +84,13 @@ export function authenticate(pool: Pool): RequestHandler {
       [hash],
     );
     if (result.rows.length === 0) {
+      securityLogger(createSecurityEvent(request, {
+        severity: "warning",
+        event: "authentication.session_rejected",
+        outcome: "failure",
+        reason: "invalid_or_expired_session",
+        statusCode: 401,
+      }));
       response.clearCookie(sessionCookie, { path: "/" });
       response.status(401).json({ message: "Authentication required" });
       return;
@@ -89,9 +102,19 @@ export function authenticate(pool: Pool): RequestHandler {
   };
 }
 
-export function requireRole(role: UserRole): RequestHandler {
+export function requireRole(role: UserRole, securityLogger: SecurityLogger = writeSecurityEvent): RequestHandler {
   return (request, response, next) => {
     if (request.authUser?.role !== role) {
+      securityLogger(createSecurityEvent(request, {
+        severity: "warning",
+        event: "authorization.role_denied",
+        outcome: "blocked",
+        reason: `requires_${role}_role`,
+        actor: request.authUser
+          ? { userId: request.authUser.id, role: request.authUser.role }
+          : undefined,
+        statusCode: 403,
+      }));
       response.status(403).json({ message: "You do not have permission to perform this action" });
       return;
     }
@@ -105,11 +128,20 @@ export function registerAuthRoutes(
   secureCookies: boolean,
   operatorLoginEnabled = true,
   authenticatedReadLimiter: RequestHandler = (_request, _response, next) => next(),
+  securityLogger: SecurityLogger = writeSecurityEvent,
 ) {
   app.post("/api/auth/login", async (request, response) => {
     const email = typeof request.body?.email === "string" ? request.body.email.trim().toLowerCase() : "";
     const password = typeof request.body?.password === "string" ? request.body.password : "";
     if (!email || email.length > 160 || !password || password.length > 200) {
+      securityLogger(createSecurityEvent(request, {
+        severity: "warning",
+        event: "authentication.login_failed",
+        outcome: "failure",
+        reason: "invalid_request",
+        actor: email ? { accountFingerprint: securityFingerprint(email) } : undefined,
+        statusCode: 400,
+      }));
       response.status(400).json({ message: "Email and password are required" });
       return;
     }
@@ -122,11 +154,33 @@ export function registerAuthRoutes(
     );
     const user = result.rows[0];
     if (!user || !(await passwordMatches(password, user.passwordSalt, user.passwordHash))) {
+      securityLogger(createSecurityEvent(request, {
+        severity: "warning",
+        event: email === "operator@retail.local"
+          ? "authentication.operator_login_blocked"
+          : "authentication.login_failed",
+        outcome: email === "operator@retail.local" ? "blocked" : "failure",
+        reason: "invalid_credentials",
+        actor: { accountFingerprint: securityFingerprint(email) },
+        statusCode: 401,
+      }));
       response.status(401).json({ message: "Invalid email or password" });
       return;
     }
 
     if (user.role === "operator" && !operatorLoginEnabled) {
+      securityLogger(createSecurityEvent(request, {
+        severity: "warning",
+        event: "authentication.operator_login_blocked",
+        outcome: "blocked",
+        reason: "operator_access_disabled",
+        actor: {
+          userId: user.id,
+          role: user.role,
+          accountFingerprint: securityFingerprint(user.email),
+        },
+        statusCode: 403,
+      }));
       response.status(403).json({ message: "Operator sign-in is disabled in the public demo" });
       return;
     }
@@ -142,7 +196,7 @@ export function registerAuthRoutes(
     response.json({ id: user.id, email: user.email, displayName: user.displayName, role: user.role });
   });
 
-  app.get("/api/auth/me", authenticate(pool), authenticatedReadLimiter, (request, response) => {
+  app.get("/api/auth/me", authenticate(pool, securityLogger), authenticatedReadLimiter, (request, response) => {
     response.json(request.authUser);
   });
 

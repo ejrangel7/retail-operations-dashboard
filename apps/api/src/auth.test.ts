@@ -51,8 +51,9 @@ describe("authentication and authorization", () => {
     const salt = "0123456789abcdef0123456789abcdef";
     const passwordHash = scryptSync("RetailOps!2026", salt, 64).toString("hex");
     const pool = poolWithRows([{ ...operator, passwordSalt: salt, passwordHash }]);
+    const securityLogger = vi.fn();
 
-    const response = await request(createApp(pool)).post("/api/auth/login").send({
+    const response = await request(createApp(pool, { securityLogger })).post("/api/auth/login").send({
       email: operator.email,
       password: "incorrect",
     });
@@ -60,16 +61,28 @@ describe("authentication and authorization", () => {
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ message: "Invalid email or password" });
     expect(vi.mocked(pool.query)).toHaveBeenCalledTimes(1);
+    expect(securityLogger).toHaveBeenCalledWith(expect.objectContaining({
+      event: "authentication.operator_login_blocked",
+      outcome: "blocked",
+      reason: "invalid_credentials",
+      statusCode: 401,
+      actor: { accountFingerprint: expect.stringMatching(/^[a-f0-9]{16}$/) },
+    }));
+    const serializedEvents = JSON.stringify(securityLogger.mock.calls);
+    expect(serializedEvents).not.toContain(operator.email);
+    expect(serializedEvents).not.toContain("incorrect");
   });
 
   it("blocks operator sign-in when the public demo disables it", async () => {
     const salt = "0123456789abcdef0123456789abcdef";
     const passwordHash = scryptSync("RetailOps!2026", salt, 64).toString("hex");
     const pool = poolWithRows([{ ...operator, passwordSalt: salt, passwordHash }]);
+    const securityLogger = vi.fn();
 
     const response = await request(createApp(pool, {
       operatorLoginEnabled: false,
       rateLimitsEnabled: false,
+      securityLogger,
     }))
       .post("/api/auth/login")
       .send({ email: operator.email, password: "RetailOps!2026" });
@@ -77,6 +90,13 @@ describe("authentication and authorization", () => {
     expect(response.status).toBe(403);
     expect(response.body).toEqual({ message: "Operator sign-in is disabled in the public demo" });
     expect(vi.mocked(pool.query)).toHaveBeenCalledTimes(1);
+    expect(securityLogger).toHaveBeenCalledWith(expect.objectContaining({
+      event: "authentication.operator_login_blocked",
+      outcome: "blocked",
+      reason: "operator_access_disabled",
+      actor: expect.objectContaining({ userId: operator.id, role: operator.role }),
+      statusCode: 403,
+    }));
   });
 
   it("disables operator sign-in by default in production", async () => {
@@ -111,10 +131,12 @@ describe("authentication and authorization", () => {
 
   it("blocks order changes from an existing operator session in the public demo", async () => {
     const pool = poolWithRows([operator]);
+    const securityLogger = vi.fn();
 
     const response = await request(createApp(pool, {
       operatorLoginEnabled: false,
       rateLimitsEnabled: false,
+      securityLogger,
     }))
       .post("/api/orders")
       .set("Cookie", "retail_session=operator-token")
@@ -128,6 +150,13 @@ describe("authentication and authorization", () => {
     expect(response.status).toBe(403);
     expect(response.body).toEqual({ message: "Order changes are disabled in the public demo" });
     expect(vi.mocked(pool.query)).toHaveBeenCalledTimes(1);
+    expect(securityLogger).toHaveBeenCalledWith(expect.objectContaining({
+      event: "authorization.operator_mutation_blocked",
+      outcome: "blocked",
+      reason: "operator_mutations_disabled",
+      actor: { userId: operator.id, role: operator.role },
+      statusCode: 403,
+    }));
   });
 
   it("rate-limits repeated failed sign-in attempts", async () => {
@@ -227,9 +256,27 @@ describe("authentication and authorization", () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
+  it("records an invalid session without exposing its token", async () => {
+    const pool = poolWithRows([]);
+    const securityLogger = vi.fn();
+    const response = await request(createApp(pool, { securityLogger }))
+      .get("/api/dashboard")
+      .set("Cookie", "retail_session=sensitive-session-token");
+
+    expect(response.status).toBe(401);
+    expect(securityLogger).toHaveBeenCalledWith(expect.objectContaining({
+      event: "authentication.session_rejected",
+      outcome: "failure",
+      reason: "invalid_or_expired_session",
+      statusCode: 401,
+    }));
+    expect(JSON.stringify(securityLogger.mock.calls)).not.toContain("sensitive-session-token");
+  });
+
   it("prevents viewers from creating orders", async () => {
     const pool = poolWithRows([viewer]);
-    const response = await request(createApp(pool))
+    const securityLogger = vi.fn();
+    const response = await request(createApp(pool, { securityLogger }))
       .post("/api/orders")
       .set("Cookie", "retail_session=viewer-token")
       .send({
@@ -242,6 +289,13 @@ describe("authentication and authorization", () => {
     expect(response.status).toBe(403);
     expect(response.body).toEqual({ message: "You do not have permission to perform this action" });
     expect(vi.mocked(pool.query)).toHaveBeenCalledTimes(1);
+    expect(securityLogger).toHaveBeenCalledWith(expect.objectContaining({
+      event: "authorization.role_denied",
+      outcome: "blocked",
+      reason: "requires_operator_role",
+      actor: { userId: viewer.id, role: viewer.role },
+      statusCode: 403,
+    }));
   });
 
   it("allows operators to create orders", async () => {
