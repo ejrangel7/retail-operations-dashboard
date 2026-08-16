@@ -9,20 +9,31 @@ services:
       - "5432:5432"
     volumes:
       - retail_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
-      - ./database/local-operator.sql:/docker-entrypoint-initdb.d/20-local-operator.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U retail -d retail_ops"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  database-setup:
+    build:
+      context: .
+      target: api-development
+    command: ["node", "dist/database-cli.js", "prepare-local"]
+    environment:
+      MIGRATION_DATABASE_URL: postgresql://retail:retail@database:5432/retail_ops
+      DATABASE_RUNTIME_ROLE: retail_app
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: "no"
+
   api:
     build:
       context: .
       target: api-development
     environment:
-      DATABASE_URL: postgresql://retail:retail@database:5432/retail_ops
+      DATABASE_URL: postgresql://retail_app:retail_app@database:5432/retail_ops
       PORT: 4000
       WEB_ORIGIN: http://localhost:8080
       COOKIE_SECURE: "false"
@@ -30,8 +41,8 @@ services:
     ports:
       - "4000:4000"
     depends_on:
-      database:
-        condition: service_healthy
+      database-setup:
+        condition: service_completed_successfully
 
   web:
     build:

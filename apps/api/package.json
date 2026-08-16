@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "db:migrate": "tsx src/database-cli.ts migrate",
+    "db:seed:demo": "tsx src/database-cli.ts seed-demo",
+    "db:grant-runtime": "tsx src/database-cli.ts grant-runtime",
+    "db:prepare-local": "tsx src/database-cli.ts prepare-local",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "test": "vitest run src",
