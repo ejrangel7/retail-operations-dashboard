@@ -10,7 +10,7 @@
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^5.0.2",
+    "@vitejs/plugin-react": "^6.0.5",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "typescript": "^5.9.2",
