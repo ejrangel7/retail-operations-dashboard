@@ -25,7 +25,11 @@ describe("LoginScreen", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("Invalid email or password");
     expect(screen.getByRole("button", { name: "Signing in..." })).toBeDisabled();
-    expect(screen.getByText(/viewer@retail.local/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toHaveValue("");
+    expect(screen.getByLabelText("Email")).toHaveAttribute("placeholder", "name@example.com");
+    expect(screen.getByLabelText("Password")).toHaveValue("");
+    expect(screen.queryByText(/viewer@retail.local/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/RetailView!2026/)).not.toBeInTheDocument();
     expect(screen.queryByText(/operator@retail.local/)).not.toBeInTheDocument();
   });
 });

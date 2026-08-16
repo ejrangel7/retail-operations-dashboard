@@ -30,9 +30,6 @@
 .login-form input { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; color: var(--ink); font: inherit; }
 .login-form input:focus { outline: 0; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
 .login-submit { margin-top: 3px; }
-.demo-accounts { display: grid; gap: 8px; margin-top: 24px; padding: 14px; border-radius: 11px; background: #f7faf7; }
-.demo-accounts p { display: grid; gap: 2px; margin: 0; font-size: 11px; }
-.demo-accounts span { color: var(--muted); overflow-wrap: anywhere; }
 .login-disclaimer { margin: 15px 0 0; color: var(--muted); font-size: 10px; text-align: center; }
 .topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
 .current-user { display: grid; gap: 2px; text-align: right; }
