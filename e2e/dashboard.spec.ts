@@ -1,5 +1,16 @@
 import { expect, test } from "@playwright/test";
 
+test("the development-only operator seed supports local workflows", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByLabel("Email").fill("operator@retail.local");
+  await page.getByLabel("Password").fill("RetailOps!2026");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByRole("heading", { name: "Good morning, Operations Manager." })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New order" })).toBeVisible();
+});
+
 test("viewer can sign in, navigate, and filter operational data", async ({ page }) => {
   await page.goto("/");
 

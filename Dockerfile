@@ -11,7 +11,7 @@ COPY apps/web/package.json ./apps/web/package.json
 RUN pnpm install --frozen-lockfile
 
 FROM build-dependencies AS api-build
-COPY apps/api/tsconfig.json ./apps/api/tsconfig.json
+COPY apps/api/tsconfig.json apps/api/tsconfig.build.json ./apps/api/
 COPY apps/api/src ./apps/api/src
 RUN pnpm --filter @retail-ops/api build
 
@@ -43,6 +43,10 @@ COPY --chown=node:node database/init.sql /app/database/init.sql
 USER node
 EXPOSE 4000
 CMD ["node", "dist/server.js"]
+
+FROM api-runtime AS api-development
+ENV NODE_ENV=development DATABASE_DEVELOPMENT_SEED_PATH=/app/database/local-operator.sql
+COPY --chown=node:node database/local-operator.sql /app/database/local-operator.sql
 
 FROM api-runtime AS runtime
 ENV PORT=10000 STATIC_ASSETS_PATH=/app/public
