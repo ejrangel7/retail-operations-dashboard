@@ -9,6 +9,7 @@ The public portfolio deployment is active at [retail-operations-dashboard.onrend
 - one Render Free web service built from the repository root `Dockerfile`
 - one Neon Free PostgreSQL database containing fictional demonstration data
 - GitHub Actions validation for pull requests and pushes to `main`
+- immutable SHA-pinned Actions and scheduled Dependabot checks for npm, Docker, and workflows
 - automatic Render deployment after the checks on `main` pass
 - `/api/health` as the Render health check
 

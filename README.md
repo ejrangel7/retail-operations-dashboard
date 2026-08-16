@@ -117,6 +117,14 @@ pnpm test:e2e
 
 Playwright reuses an existing application at `http://localhost:8080` or starts `docker compose up --build` and waits for it automatically. GitHub Actions runs the Chromium project after typecheck, unit tests, builds, and the production-image build pass.
 
+### Supply-chain controls
+
+- The committed pnpm lockfile is installed with `--frozen-lockfile` locally, in Docker, and in CI.
+- A root override keeps `nanoid` at the patched `3.3.18` release required by the current Vite/PostCSS dependency path.
+- Every external GitHub Action is pinned to a verified full commit SHA; its release tag remains in an inline comment so Dependabot can maintain it.
+- `.github/dependabot.yml` checks pnpm/npm dependencies, Docker base-image digests, and GitHub Actions every Monday. Dependabot PRs still require the normal review and successful CI before merge.
+- GitHub's dependency alerts and automatic security-update setting must remain enabled for the repository; neither setting authorizes automatic merging.
+
 Refresh the README screenshots from the public viewer experience with:
 
 ```bash
